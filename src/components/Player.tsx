@@ -85,11 +85,16 @@ function Actor({ person, self, serverTime, observingRailway = false }: { person:
     group.position.x = pose.x;
     group.position.z = pose.z;
     group.rotation.y = pose.yaw;
-    const moving = !changedLocation && !changedMode && Math.hypot(group.position.x - previousX, group.position.z - previousZ) > dt * 0.1;
+    const travelled = changedLocation || changedMode ? 0 : Math.hypot(group.position.x - previousX, group.position.z - previousZ);
+    const walkingSpeed = delta > 0 ? travelled / delta : 0;
+    const moving = walkingSpeed > 0.1 && person.vehicle === null && person.seat === null;
     group.position.y = (person.station ? (person.y ?? 13.05) : person.interior === null ? getTerrainHeight(group.position.x, group.position.z) : 0) - 0.5;
     if (bodyRef.current) {
-      bobRef.current += moving ? dt * 12 : 0;
-      bodyRef.current.position.y = MathUtils.damp(bodyRef.current.position.y, person.seat !== null ? 0.09 : moving ? Math.abs(Math.sin(bobRef.current)) * 0.08 : 0, 12, dt);
+      // Tie the gait to distance travelled and use a rounded wave so each
+      // footfall eases through its low point instead of snapping upward.
+      bobRef.current = (bobRef.current + (moving ? travelled * 4.8 : 0)) % (Math.PI * 2);
+      const bob = moving ? (1 - Math.cos(bobRef.current)) * 0.025 * Math.min(walkingSpeed / 5, 1) : 0;
+      bodyRef.current.position.y = MathUtils.damp(bodyRef.current.position.y, person.seat !== null ? 0.09 : bob, 12, dt);
     }
     if (self && observingRailway) { cameraReadyRef.current = false; return; }
     if (self) {

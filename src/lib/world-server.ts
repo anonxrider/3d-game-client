@@ -8,8 +8,9 @@ import { hitsScenery, vehicleSpawns, seats, buildings, blockedInside, nearbyInte
 import type { Input, Person, CarState, Snapshot, Coin, VehicleKind } from './multiplayer';
 
 import { findPath } from './pathfinding';
+import { advanceWalk, type WalkMotion } from './walk-motion';
 
-type Member = { person: Person; input: Input; seen: number; sequence: number; userId?: number; pathTarget?: {x: number, z: number}; path?: {x: number, z: number}[] };
+type Member = { person: Person; input: Input; seen: number; sequence: number; walkMotion?: WalkMotion; userId?: number; pathTarget?: {x: number, z: number}; path?: {x: number, z: number}[] };
 type Npc = { person: Person; target: { x: number; z: number }; wait: number; cell?: string };
 type Room = { airportPrepared?: boolean; players: Map<string, Member>; vehicles: CarState[]; coins: Coin[]; tick: number; emptySince?: number; npcs: Npc[]; populationCells?: Set<string>; trafficCells?: Map<string, number[]>; trafficPool?: number[]; trafficRoutes?: Map<number, TrafficRoute> };
 const colors = ['#38bdf8', '#fb7185', '#a3e635', '#c084fc', '#fbbf24', '#2dd4bf'];
@@ -219,6 +220,7 @@ export class WorldServer {
       && ![...room.players.values()].some(other => other !== member && other.person.interior === null
         && (other.person.station ?? null) === destination.station && Math.hypot(other.person.x - point.x, other.person.z - point.z) < 0.8));
     if (!spawn) { p.message = 'Destination is busy — try again shortly'; return; }
+    member.walkMotion = undefined;
     p.x = spawn.x; p.z = spawn.z; p.yaw = Math.PI;
     p.interior = null; p.seat = null; p.station = destination.station;
     member.input = { ...idle }; member.path = undefined; member.pathTarget = undefined;
@@ -266,8 +268,9 @@ export class WorldServer {
       for (const member of room.players.values()) {
         const p = member.person;
         const input = now - member.seen > 500 ? idle : member.input;
-        if (p.seat !== null) continue;
+        if (p.seat !== null) { member.walkMotion = undefined; continue; }
         if (p.vehicle !== null) {
+          member.walkMotion = undefined;
           const index = p.vehicle, v = room.vehicles[index];
           v.owner ??= p.id;
           if (v.owner === p.id) {
@@ -280,42 +283,43 @@ export class WorldServer {
           p.x = v.x; p.z = v.z; p.yaw = v.yaw;
         } else {
           let moveDx = 0, moveDz = 0;
+          const motion = member.walkMotion ??= { speed: 0, turnSpeed: 0 };
           if (input.targetPoint) {
             if (!member.pathTarget || member.pathTarget.x !== input.targetPoint.x || member.pathTarget.z !== input.targetPoint.z) {
               member.pathTarget = input.targetPoint;
+              motion.speed = Math.max(0, motion.speed);
+              motion.turnSpeed = 0;
               // Compute path (run max 500 nodes to keep it fast)
               const path = findPath(p.x, p.z, input.targetPoint.x, input.targetPoint.z, (x, z) => p.station ? this.platformBlocked(p, x, z) : this.blocked(room, x, z, 0.4), 1.0, 500);
               member.path = path || undefined;
             }
+            // Consume reached waypoints in the same tick instead of pausing
+            // for one simulation step at every path corner.
+            while (member.path?.length && Math.hypot(member.path[0].x - p.x, member.path[0].z - p.z) <= 0.08) member.path.shift();
             if (member.path && member.path.length > 0) {
               const nextNode = member.path[0];
-              const tx = nextNode.x - p.x;
-              const tz = nextNode.z - p.z;
+              const tx = nextNode.x - p.x, tz = nextNode.z - p.z;
               const dist = Math.hypot(tx, tz);
-              if (dist > 0.2) {
-                p.yaw = Math.atan2(tx, tz);
-                const speed = 5 * dt;
-                const step = Math.min(speed, dist);
-                moveDx = Math.sin(p.yaw) * step;
-                moveDz = Math.cos(p.yaw) * step;
-              } else {
-                member.path.shift();
-                if (member.path.length === 0) input.targetPoint = null;
-              }
+              const forward = member.path.length === 1 ? Math.min(1, dist / 0.8) : 1;
+              const { distance } = advanceWalk(motion, forward, 0, dt, input.brake);
+              const step = Math.min(Math.max(0, distance), dist);
+              moveDx = tx / dist * step;
+              moveDz = tz / dist * step;
+              const angle = Math.atan2(tx, tz) - p.yaw;
+              p.yaw += Math.atan2(Math.sin(angle), Math.cos(angle)) * (1 - Math.exp(-14 * dt));
             } else {
-              input.targetPoint = null; // No path found or reached
+              input.targetPoint = null;
+              motion.speed = 0;
+              motion.turnSpeed = 0;
             }
           } else {
             member.pathTarget = undefined;
             member.path = undefined;
-            if (input.turn) {
-              p.yaw -= input.turn * 4.0 * dt;
-            }
-            if (input.forward) {
-              const speed = 5 * dt;
-              moveDx = Math.sin(p.yaw) * input.forward * speed;
-              moveDz = Math.cos(p.yaw) * input.forward * speed;
-            }
+            const { distance, yawDelta } = advanceWalk(motion, input.forward, input.turn, dt, input.brake);
+            const heading = p.yaw + yawDelta / 2;
+            p.yaw += yawDelta;
+            moveDx = Math.sin(heading) * distance;
+            moveDz = Math.cos(heading) * distance;
           }
           if (moveDx !== 0 || moveDz !== 0) {
             let hit = false;
@@ -323,6 +327,7 @@ export class WorldServer {
             else hit = true;
             if (!(p.station ? this.platformBlocked(p, p.x, p.z + moveDz) : p.interior ? blockedInside(p.x, p.z + moveDz) : this.blocked(room, p.x, p.z + moveDz, 0.4))) p.z += moveDz;
             else hit = true;
+            if (hit) motion.speed = 0;
             if (hit && input.targetPoint) {
                // Re-calculate on collision? Or just clear it.
                // It's safer to clear it to avoid getting stuck in a loop.
@@ -409,6 +414,7 @@ export class WorldServer {
     p.message = '';
     if (input.destination !== undefined) { this.travel(room, member, input.destination); return this.snapshot(room, p.id); }
     if (interact) {
+      member.walkMotion = undefined;
       if (p.station) {
         const station = railwayStations.find(s => s.id === p.station)!;
         const exit = [10, 14, 18, 22].map(z => ({ x: station.x, z })).find(point => !this.blocked(room, point.x, point.z, 0.4)
