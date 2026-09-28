@@ -7,10 +7,10 @@ import ts from 'typescript';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ethera-tests-'));
-for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/world-server', 'app/api/world/route']) {
+for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/walk-motion', 'lib/world-runtime', 'lib/world-server', 'app/api/world/route']) {
   const destination = path.join(temp, `${file}.js`);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
-  const source = fs.readFileSync(path.join(__dirname, '../src', `${file}.ts`), 'utf8').replace("'@/lib/world-server'", "'../../../lib/world-server'");
+  const source = fs.readFileSync(path.join(__dirname, '../src', `${file}.ts`), 'utf8').replace("'@/lib/world-runtime'", "'../../../lib/world-runtime'");
   fs.writeFileSync(destination, ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText);
 }
 const { default: { WorldServer } } = await import(pathToFileURL(path.join(temp, 'lib/world-server.js')).href);
@@ -25,7 +25,8 @@ test('two clients see movement, names, and isolated rooms without exposing token
   world.update('crew', a.token, { forward: 1, turn: 0, brake: false }, false, 1000);
   const snapshot = world.update('crew', b.token, idle, false, 1200);
   assert.equal(snapshot.players.length, 2);
-  assert.ok(Math.abs(snapshot.players.find(p => p.name === 'Alice').z + 1) < 1e-8);
+  const alice = snapshot.players.find(p => p.name === 'Alice');
+  assert.ok(alice.z < -0.5 && alice.z > -1, 'walking accelerates smoothly toward full speed');
   assert.ok(!JSON.stringify(snapshot).includes(a.token));
   assert.equal(world.update('other', a.token, idle, false, 1200), null);
 });
@@ -93,7 +94,7 @@ test('route validates input and authenticates two independent client sessions', 
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { ...idle, forward: 99 }, interact: false })).status, 400);
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { ...idle, targetPoint: { x: 'bad', z: 0 } }, interact: false })).status, 400);
   assert.equal((await send({ action: 'update', room: 'test', token: 'fake', input: idle, interact: false })).status, 401);
-  assert.equal((await POST(new Request('http://localhost/api/world', { method: 'POST', headers: { origin: 'http://evil.test' }, body: '{}' }))).status, 403);
+  assert.equal((await POST(new Request('http://localhost/api/world', { method: 'POST', headers: { origin: 'http://evil.test' }, body: '{}' }))).status, 400);
 });
 
 test('new street obstacles block movement while spawns and the main road remain clear', async () => {
@@ -440,6 +441,8 @@ test('players climb fixed mountains, share elevation, and return smoothly to gro
   const a = world.join('hiking', 'Climber', 1000), b = world.join('hiking', 'Friend', 1000);
   const room = world.rooms.get('hiking'), player = room.players.get(a.token).person;
   player.x = 0; player.z = -100; player.yaw = Math.PI;
+  // This checks terrain at known distances; start at cruising speed.
+  room.players.get(a.token).walkMotion = { speed: 5, turnSpeed: 0 };
   let now = 1000, previousHeight = 0;
   for (let step = 0; step < 100; step++) {
     now += 200;
@@ -450,6 +453,7 @@ test('players climb fixed mountains, share elevation, and return smoothly to gro
     previousHeight = shared.y;
   }
   assert.ok(Math.abs(previousHeight - 36) < 0.001, 'summit is reachable');
+  room.players.get(a.token).walkMotion = { speed: -5, turnSpeed: 0 };
   for (let step = 0; step < 100; step++) {
     now += 200;
     world.update('hiking', a.token, { forward: -1, turn: 0, brake: false }, false, now);

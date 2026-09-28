@@ -171,69 +171,57 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
   useEffect(() => {
     clickTargetRef.current = null;
     let stopped = false;
-    let timeout: ReturnType<typeof setTimeout>;
-    let notice = '', noticeUntil = 0;
-    let lastSent = -Infinity, settleUntil = 0;
+    let socket: WebSocket | undefined;
+    let reconnect: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = 500;
+    let ready = false;
+    let lastReceived = performance.now();
+    let lastSent = -Infinity;
     let previousControls = '';
-    let vehicleMoving = false;
+    let notice = '', noticeUntil = 0;
     let riding = session.snapshot.players.find(p => p.id === session.snapshot.self)?.vehicle != null;
-    const controller = new AbortController();
-    const update = async () => {
-      const started = performance.now();
-      const held = (...codes: string[]) => !observingRef.current && codes.some(code => keys.current.has(code));
-      if (held('KeyH') && performance.now() - lastHornRef.current > 500) {
-        // Vehicle membership is kept current after each successful snapshot.
-        if (riding) { lastHornRef.current = performance.now(); playHorn(); }
+    let sentTarget: { point: { x: number; z: number }; sequence: number } | null = null;
+    const held = (...codes: string[]) => !observingRef.current && codes.some(code => keys.current.has(code));
+    const sendControls = () => {
+      if (held('KeyH') && riding && performance.now() - lastHornRef.current > 500) {
+        lastHornRef.current = performance.now(); playHorn();
       }
+      if (!ready || !socket || socket.readyState !== WebSocket.OPEN) return;
+      if (performance.now() - lastReceived > 10000) { socket.close(); return; }
+      if (socket.bufferedAmount > 4096) return;
       const destination = travelDestinationRef.current;
       if (destination) { keys.current.clear(); clickTargetRef.current = null; interactRef.current = false; }
       const interact = !observingRef.current && interactRef.current;
       const forward = Number(held('KeyW', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown'));
       const turn = Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'ArrowLeft'));
       if (forward !== 0 || turn !== 0) clickTargetRef.current = null;
-      const brake = observingRef.current || held('Space');
-      const targetPoint = observingRef.current ? null : clickTargetRef.current;
-      const controls = JSON.stringify([forward, turn, brake, targetPoint]);
-      const controlsChanged = controls !== previousControls;
-      const active = forward !== 0 || turn !== 0 || targetPoint !== null || interact || destination !== null;
-      // Check input locally at 20 Hz, but only use the network while active.
-      // Send releases immediately and keep sampling briefly while walking eases
-      // to a stop. Idle heartbeats stay below the server's 15-second session TTL.
-      if (controlsChanged || active) settleUntil = started + 750;
-      if (!controlsChanged && !active && !vehicleMoving && started >= settleUntil && started - lastSent < 5000) {
-        timeout = setTimeout(update, 50);
-        return;
-      }
-      previousControls = controls;
-      lastSent = started;
-      interactRef.current = false;
+      const input = {
+        destination: destination ?? undefined, forward, turn,
+        brake: observingRef.current || held('Space'),
+        targetPoint: observingRef.current ? null : clickTargetRef.current,
+      };
+      const controls = JSON.stringify(input);
+      // Send changes immediately. Small control heartbeats keep held keys safe
+      // (server stops stale controls after 500 ms) and idle sessions alive.
+      const heartbeat = forward || turn || input.targetPoint ? 250 : 5000;
+      if (!interact && controls === previousControls && performance.now() - lastSent < heartbeat) return;
       const sequence = ++sequenceRef.current;
-      try {
-        const response = await fetch('/api/world', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
-          body: JSON.stringify({ action: 'update', room: session.room, token: session.token, sequence, interact, input: {
-            destination: destination ?? undefined,
-            forward,
-            turn,
-            brake,
-            targetPoint,
-          } }),
-        });
-        if (stopped) return;
-        if (response.status === 401) { onConnection('Session expired — leave and rejoin'); return; }
-        if (!response.ok) throw new Error('Connection interrupted');
-        const next: Snapshot = await response.json();
-        if (stopped) return;
-
-        if (travelDestinationRef.current === destination) travelDestinationRef.current = null;
+      socket.send(JSON.stringify({ type: 'input', sequence, interact, input }));
+      if (input.targetPoint) sentTarget = { point: input.targetPoint, sequence };
+      previousControls = controls;
+      lastSent = performance.now();
+      interactRef.current = false;
+      if (travelDestinationRef.current === destination) travelDestinationRef.current = null;
+    };
+    const applySnapshot = (next: Snapshot, sequence: number) => {
+        const me = next.players.find(p => p.id === next.self);
+        if (!me) return;
+        sequenceRef.current = Math.max(sequenceRef.current, sequence);
         setSnapshot({ ...next, serverTime: next.serverTime ?? performance.now() }); onSnapshot(next); onCount(next.players.length); onConnection('Connected');
-        const me = next.players.find(p => p.id === next.self)!;
         riding = me.vehicle !== null;
-        const vehicle = me.vehicle === null ? undefined : next.vehicles[me.vehicle];
-        vehicleMoving = !!vehicle && Math.abs(vehicle.speed) > 0.02;
-        // Only clear the exact click this response acknowledges; the user may
-        // have chosen a different destination while the request was in flight.
-        if (targetPoint && clickTargetRef.current === targetPoint && next.targetPoint === null) clickTargetRef.current = null;
+        if (sentTarget && sequence >= sentTarget.sequence && clickTargetRef.current === sentTarget.point && next.targetPoint === null) {
+          clickTargetRef.current = null; sentTarget = null;
+        }
         onInterior(me.interior);
         if (me.message) { notice = me.message; noticeUntil = Date.now() + 2000; }
         const target = nearbyInteraction(me.x, me.z, next.vehicles);
@@ -256,13 +244,52 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
           : getTerrainHeight(me.x, me.z) > 0 ? `Mountain trail · ${Math.round(getTerrainHeight(me.x, me.z))} m · Keep walking to climb`
           : 'Explore together · E to sit, enter a building, or ride';
         onStatus(Date.now() < noticeUntil ? notice : hint);
-      } catch {
-        if (!stopped) onConnection('Connection lost — retrying…');
-      }
-      if (!stopped) timeout = setTimeout(update, Math.max(10, 50 - (performance.now() - started)));
     };
-    void update();
-    return () => { stopped = true; travelDestinationRef.current = null; clearTimeout(timeout); controller.abort(); };
+    const connect = () => {
+      if (stopped) return;
+      onConnection('Connecting…');
+      const url = new URL('/api/world/socket', window.location.href);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(url);
+      socket = ws;
+      lastReceived = performance.now();
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', room: session.room, token: session.token }));
+      ws.onmessage = event => {
+        if (stopped || socket !== ws) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type !== 'snapshot') return;
+          lastReceived = performance.now();
+          applySnapshot(data.snapshot, data.sequence);
+          if (!ready) {
+            ready = true; retryDelay = 500; previousControls = ''; sentTarget = null;
+            sendControls();
+          }
+        } catch { ws.close(1002, 'Invalid snapshot'); }
+      };
+      ws.onerror = () => ws.close();
+      ws.onclose = event => {
+        if (stopped || socket !== ws) return;
+        ready = false;
+        if (event.code === 4001 || event.code === 4002 || event.code === 1008) {
+          onConnection(event.code === 4001 ? 'Session expired — leave and rejoin' : 'Connection closed — leave and rejoin');
+          return;
+        }
+        onConnection('Connection lost — reconnecting…');
+        reconnect = setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 5000);
+      };
+    };
+    const timer = setInterval(() => {
+      if (socket && !ready && performance.now() - lastReceived > 10000) socket.close();
+      sendControls();
+    }, 25);
+    connect();
+    return () => {
+      stopped = true; travelDestinationRef.current = null;
+      clearInterval(timer); clearTimeout(reconnect);
+      socket?.close();
+    };
   }, [session, onSnapshot, keys, interactRef, onStatus, onConnection, onCount, onInterior]);
   const self = snapshot.players.find(p => p.id === snapshot.self);
   const interior = self?.interior ?? null;
