@@ -19,6 +19,7 @@ async function main() {
   const wss = createWorldSocket(world, saveAwardsBackground);
   const server = createServer(async (req, res) => {
     if (req.url?.split('?')[0] !== '/api/world') { await handle(req, res); return; }
+    res.setHeader('Cache-Control', 'private, no-store');
     if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }).end(); return; }
     try {
       const chunks: Buffer[] = [];

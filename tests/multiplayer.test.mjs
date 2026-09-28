@@ -85,11 +85,15 @@ test('route validates input and authenticates two independent client sessions', 
   let accountId = 0;
   t.mock.method(globalThis, 'fetch', async () => Response.json({ id: ++accountId, name: `Player ${accountId}`, score: 23 }));
   const send = body => POST(new Request('http://localhost/api/world', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify(body) }));
-  assert.equal((await send({ action: 'join', room: '../bad' })).status, 400);
+  const invalidRoom = await send({ action: 'join', room: '../bad' });
+  assert.equal(invalidRoom.status, 400);
+  assert.equal(invalidRoom.headers.get('cache-control'), 'private, no-store');
   const a = await (await send({ action: 'join', room: 'test', name: 'Alice', authToken: 'test-auth' })).json();
   const b = await (await send({ action: 'join', room: 'test', name: 'Bob', authToken: 'test-auth' })).json();
   assert.notEqual(a.token, b.token);
-  const snapshot = await (await send({ action: 'update', room: 'test', token: b.token, input: idle, interact: false })).json();
+  const updateResponse = await send({ action: 'update', room: 'test', token: b.token, input: idle, interact: false });
+  assert.equal(updateResponse.headers.get('cache-control'), 'private, no-store');
+  const snapshot = await updateResponse.json();
   assert.equal(snapshot.players.length, 2);
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { ...idle, forward: 99 }, interact: false })).status, 400);
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { forward: 0.35, turn: -0.6, brake: false }, interact: false })).status, 200);

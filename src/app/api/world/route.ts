@@ -1,7 +1,15 @@
 import { world, saveAwardsBackground, laravelUrl } from '@/lib/world-runtime';
 export const runtime = 'nodejs';
 
+// Apply this here too: the custom WebSocket server calls POST directly,
+// bypassing Next's configured response headers.
 export async function POST(request: Request) {
+  const response = await handleWorldRequest(request);
+  response.headers.set('Cache-Control', 'private, no-store');
+  return response;
+}
+
+async function handleWorldRequest(request: Request) {
   // Origin check removed: Render's reverse proxy causes request.url to have a different protocol/host than the actual Origin header.
   const raw = await request.text();
   if (raw.length > 2048) return Response.json({ error: 'Request too large' }, { status: 413 });
