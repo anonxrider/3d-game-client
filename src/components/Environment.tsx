@@ -3,7 +3,7 @@
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Group, InstancedMesh, Object3D } from "three";
-import { Html } from "@react-three/drei";
+import { Html, Text } from "@react-three/drei";
 import StreetProps from "./StreetProps";
 import Vehicle from "./Vehicle";
 import { houses, streetProps, trees, vehicleShopItems } from "./world";
@@ -155,6 +155,18 @@ function Road({ center, onTravelClick }: { center: { x: number; z: number }; onT
     .filter(pos => pos >= -ROAD_WORLD_LIMIT && pos <= ROAD_WORLD_LIMIT);
   return (
     <group>
+      {/* Jins Highways Watermark */}
+      <Text
+        position={[0, -0.45, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={4}
+        color="#facc15"
+        fillOpacity={0.6}
+        anchorX="center"
+        anchorY="middle"
+      >
+        Jins Highways
+      </Text>
       {/* Grid of roads */}
       {xBlocks.map(pos => (
         <group key={`road-z-${pos}`}>
@@ -197,7 +209,6 @@ function Road({ center, onTravelClick }: { center: { x: number; z: number }; onT
 }
 
 import { windowMaterial } from "./Lighting";
-import { Text } from "@react-three/drei";
 
 function Hospital({ x, z }: { x: number; z: number }) {
   return <group position={[x, -0.5, z]}>
@@ -314,6 +325,58 @@ function VehicleShop() {
   </group>;
 }
 
+function Leaves({ center }: { center: { x: number; z: number } }) {
+  const leavesMesh = useRef<InstancedMesh>(null);
+  const positions = useMemo(() => {
+    const list: [number, number, number, number][] = [];
+    const centerGX = Math.round(center.x / BLOCK_SIZE);
+    const centerGZ = Math.round(center.z / BLOCK_SIZE);
+    const hash = (x: number, z: number) => Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453);
+    for (let gx = centerGX - ROAD_RADIUS; gx <= centerGX + ROAD_RADIUS; gx++) {
+      for (let gz = centerGZ - ROAD_RADIUS; gz <= centerGZ + ROAD_RADIUS; gz++) {
+        const cx = gx * BLOCK_SIZE;
+        const cz = gz * BLOCK_SIZE;
+        if (hash(gx, gz) > 0.3) {
+            for (let i = 0; i < 5; i++) {
+                const lx = cx + (hash(gx + i, gz) - 0.5) * 40;
+                const lz = cz + (hash(gx, gz + i) > 0.5 ? 4.8 : -4.8) + (hash(gx + i, gz + i) - 0.5) * 1.5;
+                list.push([lx, lz, 0.4 + hash(lx, lz) * 0.4, hash(lz, lx) * Math.PI * 2]);
+            }
+        }
+        if (hash(gx + 1, gz + 1) > 0.3) {
+            for (let i = 0; i < 5; i++) {
+                const lx = cx + (hash(gx + i + 1, gz) > 0.5 ? 4.8 : -4.8) + (hash(gx + i, gz + i + 1) - 0.5) * 1.5;
+                const lz = cz + (hash(gx, gz + i + 1) - 0.5) * 40;
+                list.push([lx, lz, 0.4 + hash(lx, lz) * 0.4, hash(lz, lx) * Math.PI * 2]);
+            }
+        }
+      }
+    }
+    return list;
+  }, [center.x, center.z]);
+
+  useLayoutEffect(() => {
+    if (!leavesMesh.current) return;
+    const object = new Object3D();
+    positions.forEach(([x, z, scale, rot], index) => {
+      object.position.set(x, getTerrainHeight(x, z) - 0.48, z);
+      object.rotation.set(-Math.PI / 2, 0, rot);
+      object.scale.set(scale, scale, scale);
+      object.updateMatrix();
+      leavesMesh.current!.setMatrixAt(index, object.matrix);
+    });
+    leavesMesh.current.count = positions.length;
+    leavesMesh.current.instanceMatrix.needsUpdate = true;
+  }, [positions]);
+
+  return (
+    <instancedMesh ref={leavesMesh} args={[undefined, undefined, positions.length]}>
+      <planeGeometry args={[0.8, 0.8]} />
+      <meshStandardMaterial color="#ea580c" roughness={1} />
+    </instancedMesh>
+  );
+}
+
 function inRange(x: number, z: number, center: { x: number; z: number }, radius = RENDER_RADIUS) {
   return Math.abs(x - center.x) <= radius && Math.abs(z - center.z) <= radius;
 }
@@ -343,6 +406,7 @@ function EnvironmentProps({ center = { x: 0, z: 0 }, onTravelClick }: { center?:
       return <House key={`${h.x}:${h.z}`} {...h} />;
     })}
     {visibleTrees.length > 0 && <Trees positions={visibleTrees} />}
+    <Leaves center={center} />
   </group>;
 }
 
