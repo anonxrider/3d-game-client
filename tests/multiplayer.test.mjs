@@ -7,7 +7,7 @@ import ts from 'typescript';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ethera-tests-'));
-for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/police', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/walk-motion', 'lib/world-runtime', 'lib/world-server', 'app/api/world/route']) {
+for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/police', 'lib/pedestrians', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/walk-motion', 'lib/world-runtime', 'lib/world-server', 'app/api/world/route']) {
   const destination = path.join(temp, `${file}.js`);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   const source = fs.readFileSync(path.join(__dirname, '../src', `${file}.ts`), 'utf8').replace("'@/lib/world-runtime'", "'../../../lib/world-runtime'");
@@ -335,7 +335,7 @@ test('separated players keep their populations and abandoned traffic slots are r
     world.update('spread', a.token, idle, false, 1000);
   }
   assert.ok(room.vehicles.length <= capacity + 4, 'travel reuses slots rather than growing forever');
-  assert.ok(room.npcs.length <= room.populationCells.size * 6);
+  assert.ok(room.npcs.length <= room.populationCells.size * 8);
 });
 
 
@@ -732,4 +732,39 @@ test('traffic police stop approaching cars on red and release them on green', ()
   room.tick = 11000;
   world.steerTraffic(room, vehicle, index, 0.1);
   assert.ok(vehicle.x < x + 9);
+});
+
+
+test('ambulances, fire engines and their crews populate the shared world', () => {
+  const world = new WorldServer();
+  const joined = world.join('rescue', 'Visitor', 1000);
+  const first = world.update('rescue', joined.token, idle, false, 1100);
+  for (const service of ['ambulance', 'fire']) {
+    const index = first.vehicles.findIndex(v => v.service === service && v.autopilot);
+    assert.ok(index >= 0, `${service} spawns`);
+    const later = world.update('rescue', joined.token, idle, false, 2100);
+    assert.equal(later.vehicles[index].service, service);
+    assert.ok(later.vehicles[index].x !== first.vehicles[index].x || later.vehicles[index].z !== first.vehicles[index].z, `${service} drives its route`);
+  }
+  for (const duty of ['paramedic', 'firefighter']) {
+    assert.ok(first.npcs.some(p => p.duty === duty), `${duty} spawns`);
+  }
+  const second = world.join('rescue', 'Observer', 2200);
+  const shared = world.update('rescue', second.token, idle, false, 2200);
+  assert.ok(shared.vehicles.some(v => v.service === 'ambulance'));
+  assert.ok(shared.vehicles.some(v => v.service === 'fire'));
+});
+
+
+test('civilian population includes women, men, children and seniors without adding crowd slots', () => {
+  const world = new WorldServer();
+  const joined = world.join('people', 'Visitor', 1000);
+  const first = world.update('people', joined.token, idle, false, 1100);
+  const civilians = first.npcs.filter(p => !p.duty);
+  for (const age of ['adult', 'child', 'senior']) assert.ok(civilians.some(p => p.appearance?.age === age));
+  for (const gender of ['woman', 'man']) assert.ok(civilians.some(p => p.appearance?.gender === gender));
+  assert.ok(first.npcs.filter(p => p.duty).every(p => !p.appearance));
+  const second = world.join('people', 'Observer', 1100);
+  const shared = world.update('people', second.token, idle, false, 1100);
+  for (const person of civilians) assert.deepEqual(shared.npcs.find(p => p.id === person.id)?.appearance, person.appearance);
 });

@@ -381,10 +381,11 @@ function inRange(x: number, z: number, center: { x: number; z: number }, radius 
   return Math.abs(x - center.x) <= radius && Math.abs(z - center.z) <= radius;
 }
 
-function EnvironmentProps({ center = { x: 0, z: 0 }, onTravelClick }: { center?: { x: number; z: number }; onTravelClick?: (point: { x: number; z: number }) => void }) {
-  const visibleHouses = useMemo(() => houses.filter(h => inRange(h.x, h.z, center)), [center]);
-  const visibleTrees = useMemo(() => trees.filter(([x, z]) => inRange(x, z, center)), [center]);
-  const visibleStreetProps = useMemo(() => streetProps.filter(prop => inRange(prop.x, prop.z, center)), [center]);
+function EnvironmentProps({ center = { x: 0, z: 0 }, onTravelClick, mobile = false }: { mobile?: boolean; center?: { x: number; z: number }; onTravelClick?: (point: { x: number; z: number }) => void }) {
+  const radius = mobile ? 85 : RENDER_RADIUS;
+  const visibleHouses = useMemo(() => houses.filter(h => inRange(h.x, h.z, center, radius)), [center, radius]);
+  const visibleTrees = useMemo(() => trees.filter(([x, z]) => inRange(x, z, center, radius)), [center, radius]);
+  const visibleStreetProps = useMemo(() => streetProps.filter(prop => inRange(prop.x, prop.z, center, radius)), [center, radius]);
 
   const namedPlaces = useMemo(() => visibleHouses
     .filter(h => Math.hypot(h.x - center.x, h.z - center.z) < 55)
@@ -396,7 +397,7 @@ function EnvironmentProps({ center = { x: 0, z: 0 }, onTravelClick }: { center?:
       <span className="place-label">{h.name}</span>
     </Html>)}
     <Mountains onTravelClick={onTravelClick} />
-    <SkyLife center={center} />
+    {!mobile && <SkyLife center={center} />}
     <Road center={center} onTravelClick={onTravelClick} />
     <StreetProps props={visibleStreetProps} center={center} />
     {inRange(-30, 28, center) && <VehicleShop />}
@@ -406,7 +407,7 @@ function EnvironmentProps({ center = { x: 0, z: 0 }, onTravelClick }: { center?:
       return <House key={`${h.x}:${h.z}`} {...h} />;
     })}
     {visibleTrees.length > 0 && <Trees positions={visibleTrees} />}
-    <Leaves center={center} />
+    {!mobile && <Leaves center={center} />}
   </group>;
 }
 

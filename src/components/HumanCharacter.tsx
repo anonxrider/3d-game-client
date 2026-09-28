@@ -1,13 +1,14 @@
 "use client";
 
+import { pedestrianScale, type Appearance } from '@/lib/pedestrians';
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Group, MathUtils, MeshStandardMaterial, SphereGeometry, Vector3 } from 'three';
 
 // All avatars reuse these low-poly resources, including when entering vehicles.
 const roundedGeometry = new SphereGeometry(1, 12, 8);
-const skin = new MeshStandardMaterial({ color: '#c68d68', roughness: 0.85 });
-const hair = new MeshStandardMaterial({ color: '#29201d', roughness: 1 });
+const skins = ['#c68d68', '#8d553b', '#e7b995', '#5c382b'].map(color => new MeshStandardMaterial({ color, roughness: 0.85 }));
+const hairs = ['#29201d', '#633b27', '#b58a49', '#242424', '#cbd5e1'].map(color => new MeshStandardMaterial({ color, roughness: 1 }));
 const trousers = new MeshStandardMaterial({ color: '#283747', roughness: 0.95 });
 const shoes = new MeshStandardMaterial({ color: '#1b2028', roughness: 0.8 });
 const eyes = new MeshStandardMaterial({ color: '#241d19', roughness: 0.6 });
@@ -17,7 +18,11 @@ function Shape({ position, scale, material }: { position: Point; scale: Point; m
   return <mesh position={position} scale={scale} geometry={roundedGeometry} material={material} castShadow receiveShadow dispose={null} />;
 }
 
-export default function HumanCharacter({ seated = false, riding = false, color = '#38bdf8' }: { seated?: boolean; riding?: boolean; color?: string }) {
+export default function HumanCharacter({ seated = false, riding = false, color = '#38bdf8', appearance }: { seated?: boolean; riding?: boolean; color?: string; appearance?: Appearance }) {
+  const skin = skins[appearance?.skin ?? 0] ?? skins[0];
+  const senior = appearance?.age === 'senior';
+  const child = appearance?.age === 'child';
+  const hair = hairs[senior ? 4 : appearance?.hair ?? 0] ?? hairs[0];
   const shirt = useMemo(() => new MeshStandardMaterial({ color, roughness: 0.9 }), [color]);
   useEffect(() => () => shirt.dispose(), [shirt]);
   const root = useRef<Group>(null);
@@ -40,7 +45,7 @@ export default function HumanCharacter({ seated = false, riding = false, color =
     const speed = distance < 1 && delta > 0 ? distance / delta : 0;
     const walking = !seated && speed > 0.08;
     state.weight = MathUtils.damp(state.weight, walking ? Math.min(speed / 3, 1) : 0, 12, dt);
-    if (walking) state.phase = (state.phase + distance * 4.8) % (Math.PI * 2);
+    if (walking) state.phase = (state.phase + distance * (child ? 6.3 : 4.8)) % (Math.PI * 2);
     const swing = Math.sin(state.phase) * state.weight;
     const pose = (joint: Group | null, angle: number) => {
       if (joint) joint.rotation.x = MathUtils.damp(joint.rotation.x, angle, 18, dt);
@@ -54,18 +59,24 @@ export default function HumanCharacter({ seated = false, riding = false, color =
     pose(leftElbow.current, seated ? (riding ? -0.45 : -1) : -0.14 - Math.max(0, swing) * 0.18);
     pose(rightElbow.current, seated ? (riding ? -0.45 : -1) : -0.14 - Math.max(0, -swing) * 0.18);
     if (torso.current) {
-      torso.current.rotation.x = MathUtils.damp(torso.current.rotation.x, riding ? 0.18 : walking ? 0.035 : 0, 10, dt);
+      torso.current.rotation.x = MathUtils.damp(torso.current.rotation.x, riding ? 0.18 : senior ? 0.06 : walking ? 0.035 : 0, 10, dt);
       torso.current.rotation.z = MathUtils.damp(torso.current.rotation.z, seated ? 0 : swing * 0.025, 10, dt);
     }
   });
 
-  return <group ref={root}>
+  return <group ref={root} scale={pedestrianScale(appearance)}>
     <group position={[0, seated ? 0.6 : 0.87, 0]}>
       <Shape position={[0, 0.015, 0]} scale={[0.2, 0.14, 0.13]} material={trousers} />
       <group ref={torso} rotation={[riding ? 0.18 : 0, 0, 0]}>
         <Shape position={[0, 0.29, 0]} scale={[0.25, 0.32, 0.145]} material={shirt} />
+        {child && <Shape position={[0, 0.28, -0.2]} scale={[0.21, 0.24, 0.11]} material={trousers} />}
         <Shape position={[0, 0.565, 0]} scale={[0.068, 0.1, 0.07]} material={skin} />
-        <group position={[0, 0.76, 0]}>
+        <group position={[0, 0.76, 0]} scale={child ? 1.12 : 1}>
+          {appearance?.longHair && <Shape position={[0, -0.06, -0.09]} scale={[0.155, 0.25, 0.105]} material={hair} />}
+          {senior && <group position={[0, 0.03, 0.143]}>
+            {[-0.055, 0.055].map(x => <mesh key={x} position={[x, 0, 0]}><torusGeometry args={[0.043, 0.008, 4, 8]} /><meshStandardMaterial color="#475569" /></mesh>)}
+            <mesh><boxGeometry args={[0.03, 0.01, 0.01]} /><meshStandardMaterial color="#475569" /></mesh>
+          </group>}
           <Shape position={[0, 0, 0]} scale={[0.135, 0.18, 0.135]} material={skin} />
           <Shape position={[0, 0.09, -0.025]} scale={[0.14, 0.105, 0.128]} material={hair} />
           <Shape position={[0, -0.055, 0.065]} scale={[0.1, 0.095, 0.085]} material={skin} />

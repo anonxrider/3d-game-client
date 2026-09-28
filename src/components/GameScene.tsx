@@ -13,6 +13,7 @@ import Auth from "./Auth";
 import { buildings, vehicleShopItems, getAreaName } from "./world";
 import type { Snapshot } from "@/lib/multiplayer";
 import TouchControls from "./TouchControls";
+import { useMobileControls } from './useMobileControls';
 import AdaptiveResolution from "./AdaptiveResolution";
 import { getTerrainHeight, mountains } from "@/lib/terrain";
 import { destinations } from "@/lib/destinations";
@@ -98,8 +99,8 @@ function MiniMap({ snapshot }: { snapshot: Snapshot | null }) {
       </span>;
     })}
     {nearbyVehicles.map(vehicle => (
-      <span key={vehicle.index} className={`mini-map-pin mini-map-vehicle mini-map-${vehicle.kind}`} style={toMap(vehicle.x, vehicle.z)} title={vehicle.kind}>
-        {vehicle.kind === 'car' ? 'C' : vehicle.kind === 'cycle' ? 'Y' : 'B'}
+      <span key={vehicle.index} className={`mini-map-pin mini-map-vehicle mini-map-${vehicle.kind}`} style={toMap(vehicle.x, vehicle.z)} title={vehicle.service === 'fire' ? 'Fire engine' : vehicle.service === 'ambulance' ? 'Ambulance' : vehicle.police ? 'Police car' : vehicle.kind}>
+        {vehicle.service === 'ambulance' ? '+' : vehicle.service === 'fire' ? 'F' : vehicle.police ? 'P' : vehicle.kind === 'car' ? 'C' : vehicle.kind === 'cycle' ? 'Y' : 'B'}
       </span>
     ))}
     {snapshot?.players.filter(player => player.interior === null && player.id !== snapshot.self).map(player => (
@@ -125,6 +126,7 @@ function MiniMap({ snapshot }: { snapshot: Snapshot | null }) {
 }
 
 export default function GameScene() {
+  const mobile = useMobileControls();
   const [storedSession] = useState(loadStoredSession);
   const [user, setUser] = useState<AuthUser | null>(storedSession.user);
   const [token, setToken] = useState<string | null>(storedSession.token);
@@ -152,8 +154,8 @@ export default function GameScene() {
   const chunkZ = Math.round(renderCenter.z / 20) * 20;
   const sceneryCenter = useMemo(() => ({ x: chunkX, z: chunkZ }), [chunkX, chunkZ]);
   const setTravelTarget = useCallback((point: { x: number; z: number }) => {
-    if (!observingScene) clickTargetRef.current = point;
-  }, [observingScene]);
+    if (!observingScene && !mobile) clickTargetRef.current = point;
+  }, [observingScene, mobile]);
 
   const handleAuthenticated = (userData: AuthUser, authToken: string) => {
     setUser(userData);
@@ -201,7 +203,7 @@ export default function GameScene() {
     </form>
   </div>;
   const dayCycle = getDayCycle(snapshot?.serverTime ?? 0);
-  const visibleCoins = snapshot?.coins?.filter(coin => Math.abs(coin.x - renderCenter.x) <= 100 && Math.abs(coin.z - renderCenter.z) <= 100) ?? [];
+  const visibleCoins = snapshot?.coins?.filter(coin => Math.abs(coin.x - renderCenter.x) <= (mobile ? 60 : 100) && Math.abs(coin.z - renderCenter.z) <= (mobile ? 60 : 100)) ?? [];
 
   return (
     <>
@@ -237,7 +239,7 @@ export default function GameScene() {
       {observingAirport ? 'Airport camera · Watch departures and landings · Back to player to explore' : observingRailway ? 'Train camera · Select Back to player to resume exploring' : status}
     </div>
     <MiniMap snapshot={snapshot} />
-    {!observingScene && <TouchControls />}
+    {!observingScene && <TouchControls driving={selfPlayer?.vehicle != null} />}
     
     {(() => {
       const self = snapshot?.players.find(p => p.id === snapshot.self);
@@ -259,7 +261,7 @@ export default function GameScene() {
       camera={{ position: [0, 5, 10], fov: 50, near: 0.5, far: 600 }}
       style={{ width: "100%", height: "100%" }}
     >
-      <fog attach="fog" args={["#bfd6e1", observingAirport ? 1200 : 90, observingAirport ? 2000 : 260]} />
+      <fog attach="fog" args={["#bfd6e1", observingAirport ? 1200 : mobile ? 55 : 90, observingAirport ? 2000 : mobile ? 110 : 260]} />
       <AdaptiveResolution />
       <DayNightCycle serverTime={snapshot?.serverTime} interior={interior !== null} />
 
@@ -273,7 +275,7 @@ export default function GameScene() {
       </mesh>
 
       {/* Environment Props (Trees, Roads, Cars) */}
-      <EnvironmentProps center={sceneryCenter} onTravelClick={setTravelTarget} />
+      <EnvironmentProps mobile={mobile} center={sceneryCenter} onTravelClick={setTravelTarget} />
       <Airport focused={observingAirport} serverTime={snapshot?.serverTime} />
       <Railway center={sceneryCenter} serverTime={snapshot?.serverTime} focusedTrain={observingRailway ? focusedTrain : null} />
 

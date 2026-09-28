@@ -1,4 +1,8 @@
 "use client";
+import { pedestrianScale } from '@/lib/pedestrians';
+import { useMobileControls } from './useMobileControls';
+import VehicleAudio from './VehicleAudio';
+import { EmergencyVehicle, EmergencyWorker } from './EmergencyServices';
 import { PoliceOfficer, PoliceLights } from './Police';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -122,8 +126,8 @@ function Actor({ person, self, serverTime, observingRailway = false }: { person:
     }
   });
   return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]} visible={!!person}>
-    <group ref={bodyRef} visible={person?.vehicle === null}>{person.duty ? <PoliceOfficer duty={person.duty} serverTime={serverTime} /> : <Rider color={initialColor} seated={person?.seat !== null} />}</group>
-    <Html position={[0, person?.vehicle === null ? 2.2 : 2.8, 0]} center style={{ pointerEvents: 'none' }}>
+    <group ref={bodyRef} visible={person?.vehicle === null}>{person.duty === 'paramedic' || person.duty === 'firefighter' ? <EmergencyWorker duty={person.duty} /> : person.duty ? <PoliceOfficer duty={person.duty} serverTime={serverTime} /> : <Rider color={initialColor} seated={person?.seat !== null} appearance={person.appearance} />}</group>
+    <Html position={[0, person?.vehicle === null ? 2.2 * pedestrianScale(person.appearance) : 2.8, 0]} center style={{ pointerEvents: 'none' }}>
       <span className={`player-label${self ? ' player-label-self' : ''}`}>{initialName}{self ? ' (you)' : ''}</span>
     </Html>
   </group>;
@@ -136,8 +140,8 @@ function SharedVehicle({ vehicle, serverTime }: { vehicle: CarState; serverTime:
   const groupRef = useRef<Group>(null);
   const [initial] = useState<[number, number, number]>([initialVehicle?.x || 0, -0.5, initialVehicle?.z || 0]);
   const [initialYaw] = useState(initialVehicle?.yaw || 0);
-  const [kind] = useState(initialVehicle?.kind || 'car');
-  const [color] = useState(initialVehicle?.color || '#38bdf8');
+  const kind = vehicle.kind;
+  const color = vehicle.color;
 
   const occupied = vehicle.owner !== null;
   useFrame(() => {
@@ -150,7 +154,7 @@ function SharedVehicle({ vehicle, serverTime }: { vehicle: CarState; serverTime:
     g.position.y = getTerrainHeight(g.position.x, g.position.z) - 0.5;
     g.rotation.y = pose.yaw;
   });
-  return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]}><Vehicle kind={kind} color={vehicle.police ? "#f1f5f9" : color} occupied={occupied} />{vehicle.police && <PoliceLights serverTime={serverTime} />}</group>;
+  return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]}>{vehicle.service ? <EmergencyVehicle service={vehicle.service} serverTime={serverTime} occupied={occupied} /> : <Vehicle kind={kind} color={vehicle.police ? "#f1f5f9" : color} occupied={occupied} />}{vehicle.police && <PoliceLights serverTime={serverTime} />}</group>;
 }
 const MemoizedSharedVehicle = React.memo(SharedVehicle);
 
@@ -159,6 +163,7 @@ export const clickTargetRef = { current: null as { x: number, z: number } | null
 
 export default function Player({ session, observingRailway = false, onSnapshot, onStatus, onConnection, onCount, onInterior }: { session: Session; observingRailway?: boolean; onSnapshot: (snapshot: Snapshot) => void; onStatus: (text: string) => void; onConnection: (text: string) => void; onCount: (count: number) => void; onInterior: (id: string | null) => void }) {
   const [snapshot, setSnapshot] = useState(session.snapshot);
+  const mobile = useMobileControls();
   const { keys, touchKeys, interactRef, movement, resetControls } = useKeyboardControls();
   const sequenceRef = useRef(0);
   const lastHornRef = useRef(0);
@@ -239,7 +244,7 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
           : target?.kind === 'vehicleShop' ? `Press E to buy ${vehicleShopItems[target.index].name} (${vehicleShopItems[target.index].cost} coins)`
           : target?.kind === 'seat' ? 'Press E to sit down'
           : target?.kind === 'building' ? (!me.unlocked?.includes(buildings[target.index].id) && buildings[target.index].cost > 0 ? `Press E to unlock ${buildings[target.index].name} (${buildings[target.index].cost} coins)` : `Press E to enter ${buildings[target.index].name}`)
-          : target?.kind === 'vehicle' ? (isVehicleFull ? `${next.vehicles[target.index].kind} is full` : `Press E to get in ${next.vehicles[target.index].kind}`)
+          : target?.kind === 'vehicle' ? (isVehicleFull ? `${next.vehicles[target.index].service === "fire" ? "fire engine" : next.vehicles[target.index].service ?? (next.vehicles[target.index].police ? "police car" : next.vehicles[target.index].kind)} is full` : `Press E to get in ${next.vehicles[target.index].service === "fire" ? "fire engine" : next.vehicles[target.index].service ?? (next.vehicles[target.index].police ? "police car" : next.vehicles[target.index].kind)}`)
           : railwayStations.some(s => Math.hypot(me.x - s.x, me.z - 10) < 2.2) ? 'Station lift · Press E to go up to the platform'
           : getTerrainHeight(me.x, me.z) > 0 ? `Mountain trail · ${Math.round(getTerrainHeight(me.x, me.z))} m · Keep walking to climb`
           : 'Explore together · E to sit, enter a building, or ride';
@@ -305,8 +310,9 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
   }, [session, onSnapshot, keys, touchKeys, interactRef, movement, resetControls, onStatus, onConnection, onCount, onInterior]);
   const self = snapshot.players.find(p => p.id === snapshot.self);
   const interior = self?.interior ?? null;
-  const nearby = (x: number, z: number) => Math.abs(x - (self?.x ?? 0)) < 150 && Math.abs(z - (self?.z ?? 0)) < 150;
+  const nearby = (x: number, z: number) => Math.abs(x - (self?.x ?? 0)) < (mobile ? 85 : 150) && Math.abs(z - (self?.z ?? 0)) < (mobile ? 85 : 150);
   return <>
+    <VehicleAudio snapshot={snapshot} />
     {snapshot.players.map(p => p.interior === interior ? <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={p.id === snapshot.self} observingRailway={observingRailway} /> : null)}
     {interior === null && snapshot.npcs?.filter(p => nearby(p.x, p.z)).map(p => <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={false} />)}
     {interior === null && snapshot.vehicles.map((v, i) => nearby(v.x, v.z) ? <MemoizedSharedVehicle key={i} vehicle={v} serverTime={snapshot.serverTime ?? 0} /> : null)}
