@@ -56,6 +56,10 @@ test('socket auth, idle broadcasts, controls, reconnect, validation and disconne
   assert.equal(world.rooms.get('test')!.players.get(alice.token)!.input.forward, 0);
   const reconnected = await connect(alice.token);
   assert.equal((await next(reconnected)).sequence, 1);
-  reconnected.send(JSON.stringify({type:'input',sequence:2,interact:false,input:{forward:99,turn:0,brake:false}}));
+  reconnected.send(JSON.stringify({ type: 'input', sequence: 2, interact: false, input: { forward: 0.35, turn: -0.6, brake: false } }));
+  while ((await next(reconnected)).sequence < 2) {}
+  assert.equal(world.rooms.get('test')!.players.get(alice.token)!.input.forward, 0.35);
+  assert.equal(world.rooms.get('test')!.players.get(alice.token)!.input.turn, -0.6);
+  reconnected.send(JSON.stringify({type:'input',sequence:3,interact:false,input:{forward:99,turn:0,brake:false}}));
   assert.equal((await once(reconnected, 'close'))[0], 1008);
 });

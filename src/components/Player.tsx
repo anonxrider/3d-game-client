@@ -158,7 +158,7 @@ export const clickTargetRef = { current: null as { x: number, z: number } | null
 
 export default function Player({ session, observingRailway = false, onSnapshot, onStatus, onConnection, onCount, onInterior }: { session: Session; observingRailway?: boolean; onSnapshot: (snapshot: Snapshot) => void; onStatus: (text: string) => void; onConnection: (text: string) => void; onCount: (count: number) => void; onInterior: (id: string | null) => void }) {
   const [snapshot, setSnapshot] = useState(session.snapshot);
-  const { keys, interactRef } = useKeyboardControls();
+  const { keys, interactRef, movement } = useKeyboardControls();
   const sequenceRef = useRef(0);
   const lastHornRef = useRef(0);
   const observingRef = useRef(observingRailway);
@@ -192,8 +192,8 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
       const destination = travelDestinationRef.current;
       if (destination) { keys.current.clear(); clickTargetRef.current = null; interactRef.current = false; }
       const interact = !observingRef.current && interactRef.current;
-      const forward = Number(held('KeyW', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown'));
-      const turn = Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'ArrowLeft'));
+      const forward = observingRef.current || destination ? 0 : MathUtils.clamp(Number(held('KeyW', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown')) + Math.round(movement.current.forward * 100) / 100, -1, 1);
+      const turn = observingRef.current || destination ? 0 : MathUtils.clamp(Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'ArrowLeft')) + Math.round(movement.current.turn * 100) / 100, -1, 1);
       if (forward !== 0 || turn !== 0) clickTargetRef.current = null;
       const input = {
         destination: destination ?? undefined, forward, turn,
@@ -290,7 +290,7 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
       clearInterval(timer); clearTimeout(reconnect);
       socket?.close();
     };
-  }, [session, onSnapshot, keys, interactRef, onStatus, onConnection, onCount, onInterior]);
+  }, [session, onSnapshot, keys, interactRef, movement, onStatus, onConnection, onCount, onInterior]);
   const self = snapshot.players.find(p => p.id === snapshot.self);
   const interior = self?.interior ?? null;
   const nearby = (x: number, z: number) => Math.abs(x - (self?.x ?? 0)) < 150 && Math.abs(z - (self?.z ?? 0)) < 150;

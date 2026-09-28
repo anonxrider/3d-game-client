@@ -3,7 +3,7 @@ import type { WorldServer } from './world-server';
 import type { Input } from './multiplayer';
 
 function validInput(input: Input) {
-  return input && [-1, 0, 1].includes(input.forward) && [-1, 0, 1].includes(input.turn)
+  return input && Number.isFinite(input.forward) && Math.abs(input.forward) <= 1 && Number.isFinite(input.turn) && Math.abs(input.turn) <= 1
     && typeof input.brake === 'boolean'
     && (input.destination === undefined || (typeof input.destination === 'string' && input.destination.length <= 64))
     && (input.targetPoint == null || (Number.isFinite(input.targetPoint.x) && Number.isFinite(input.targetPoint.z)

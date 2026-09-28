@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     world.leave(data.room, data.token);
     return Response.json({ ok: true });
   }
-  if (data.action !== 'update' || !data.input || ![-1, 0, 1].includes(data.input.forward) || ![-1, 0, 1].includes(data.input.turn) || typeof data.input.brake !== 'boolean' || typeof data.interact !== 'boolean') return Response.json({ error: 'Invalid controls' }, { status: 400 });
+  if (data.action !== 'update' || !data.input || !Number.isFinite(data.input.forward) || Math.abs(data.input.forward) > 1 || !Number.isFinite(data.input.turn) || Math.abs(data.input.turn) > 1 || typeof data.input.brake !== 'boolean' || typeof data.interact !== 'boolean') return Response.json({ error: 'Invalid controls' }, { status: 400 });
   if (data.sequence !== undefined && (!Number.isSafeInteger(data.sequence) || data.sequence < 0)) return Response.json({ error: 'Invalid update sequence' }, { status: 400 });
 
   if (data.input.destination !== undefined && (typeof data.input.destination !== 'string' || data.input.destination.length > 64)) return Response.json({ error: 'Invalid destination' }, { status: 400 });
