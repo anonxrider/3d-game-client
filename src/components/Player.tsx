@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { Group, MathUtils, Vector3 } from 'three';
+import { MotionBuffer } from '@/lib/motion-buffer';
 import { railwayStations } from "@/lib/railway";
 import { getTerrainHeight } from "@/lib/terrain";
 import Vehicle, { Rider } from './Vehicle';
@@ -38,7 +39,8 @@ function playHorn() {
   } catch {}
 }
 
-function Actor({ person, self, observingRailway = false }: { person: Person; self: boolean; observingRailway?: boolean }) {
+function Actor({ person, self, serverTime, observingRailway = false }: { person: Person; self: boolean; serverTime: number; observingRailway?: boolean }) {
+  const [motion] = useState(() => new MotionBuffer());
   const initialPerson = person;
   const groupRef = useRef<Group>(null);
   const bodyRef = useRef<Group>(null);
@@ -69,8 +71,8 @@ function Actor({ person, self, observingRailway = false }: { person: Person; sel
   useFrame(({ camera }, delta) => {
     const group = groupRef.current;
     if (!group || !person) return;
-    const dt = Math.min(delta, 0.05), alpha = 1 - Math.exp(-14 * dt);
-    const moving = Math.hypot(group.position.x - person.x, group.position.z - person.z) > 0.025;
+    const dt = Math.min(delta, 0.05);
+    const previousX = group.position.x, previousZ = group.position.z;
     targetRef.current.set(person.x, (person.y ?? (person.interior === null ? getTerrainHeight(person.x, person.z) : 0)) - 0.5, person.z);
     const changedLocation = locationRef.current !== person.interior || Math.hypot(group.position.x - person.x, group.position.z - person.z) > 60;
     const mode = `${person.vehicle}:${person.seat}:${person.station}`;
@@ -79,10 +81,12 @@ function Actor({ person, self, observingRailway = false }: { person: Person; sel
       group.position.copy(targetRef.current); group.rotation.y = person.yaw;
       locationRef.current = person.interior; modeRef.current = mode;
     }
-    else group.position.lerp(targetRef.current, alpha);
+    const pose = motion.update(person, serverTime, performance.now(), changedLocation || changedMode);
+    group.position.x = pose.x;
+    group.position.z = pose.z;
+    group.rotation.y = pose.yaw;
+    const moving = !changedLocation && !changedMode && Math.hypot(group.position.x - previousX, group.position.z - previousZ) > dt * 0.1;
     group.position.y = (person.station ? (person.y ?? 13.05) : person.interior === null ? getTerrainHeight(group.position.x, group.position.z) : 0) - 0.5;
-    const angle = person.yaw - group.rotation.y;
-    group.rotation.y += Math.atan2(Math.sin(angle), Math.cos(angle)) * alpha;
     if (bodyRef.current) {
       bobRef.current += moving ? dt * 12 : 0;
       bodyRef.current.position.y = MathUtils.damp(bodyRef.current.position.y, person.seat !== null ? 0.09 : moving ? Math.abs(Math.sin(bobRef.current)) * 0.08 : 0, 12, dt);
@@ -103,7 +107,7 @@ function Actor({ person, self, observingRailway = false }: { person: Person; sel
         cameraOffsetRef.current.copy(cameraRef.current);
         cameraReadyRef.current = true;
       } else {
-        cameraLookRef.current.lerp(targetRef.current, 1 - Math.exp(-10 * dt));
+        cameraLookRef.current.copy(targetRef.current);
         cameraOffsetRef.current.lerp(cameraRef.current, 1 - Math.exp(-8 * dt));
       }
       camera.position.copy(cameraLookRef.current).add(cameraOffsetRef.current);
@@ -120,7 +124,8 @@ function Actor({ person, self, observingRailway = false }: { person: Person; sel
 }
 const MemoizedActor = React.memo(Actor);
 
-function SharedVehicle({ vehicle }: { vehicle: CarState }) {
+function SharedVehicle({ vehicle, serverTime }: { vehicle: CarState; serverTime: number }) {
+  const [motion] = useState(() => new MotionBuffer());
   const initialVehicle = vehicle;
   const groupRef = useRef<Group>(null);
   const [initial] = useState<[number, number, number]>([initialVehicle?.x || 0, -0.5, initialVehicle?.z || 0]);
@@ -129,14 +134,15 @@ function SharedVehicle({ vehicle }: { vehicle: CarState }) {
   const [color] = useState(initialVehicle?.color || '#38bdf8');
 
   const occupied = vehicle.owner !== null;
-  useFrame((_, delta) => {
+  useFrame(() => {
     if (!groupRef.current) return;
-    const g = groupRef.current, alpha = 1 - Math.exp(-14 * Math.min(delta, 0.05));
-    g.position.x += (vehicle.x - g.position.x) * alpha;
-    g.position.z += (vehicle.z - g.position.z) * alpha;
+    const g = groupRef.current;
+    const teleported = Math.hypot(vehicle.x - g.position.x, vehicle.z - g.position.z) > 60;
+    const pose = motion.update(vehicle, serverTime, performance.now(), teleported);
+    g.position.x = pose.x;
+    g.position.z = pose.z;
     g.position.y = getTerrainHeight(g.position.x, g.position.z) - 0.5;
-    const angle = vehicle.yaw - g.rotation.y;
-    g.rotation.y += Math.atan2(Math.sin(angle), Math.cos(angle)) * alpha;
+    g.rotation.y = pose.yaw;
   });
   return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]}><Vehicle kind={kind} color={color} occupied={occupied} /></group>;
 }
@@ -190,11 +196,9 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
         if (!response.ok) throw new Error('Connection interrupted');
         const next: Snapshot = await response.json();
         if (stopped) return;
-        const latency = Math.round(performance.now() - started);
-        console.log(`Network Latency: ${latency}ms`);
-        
+
         if (travelDestinationRef.current === destination) travelDestinationRef.current = null;
-        setSnapshot(next); onSnapshot(next); onCount(next.players.length); onConnection('Connected');
+        setSnapshot({ ...next, serverTime: next.serverTime ?? performance.now() }); onSnapshot(next); onCount(next.players.length); onConnection('Connected');
         const me = next.players.find(p => p.id === next.self)!;
         onInterior(me.interior);
         if (me.message) { notice = me.message; noticeUntil = Date.now() + 2000; }
@@ -235,8 +239,8 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
   const interior = self?.interior ?? null;
   const nearby = (x: number, z: number) => Math.abs(x - (self?.x ?? 0)) < 150 && Math.abs(z - (self?.z ?? 0)) < 150;
   return <>
-    {snapshot.players.map(p => p.interior === interior ? <MemoizedActor key={p.id} person={p} self={p.id === snapshot.self} observingRailway={observingRailway} /> : null)}
-    {interior === null && snapshot.npcs?.filter(p => nearby(p.x, p.z)).map(p => <MemoizedActor key={p.id} person={p} self={false} />)}
-    {interior === null && snapshot.vehicles.map((v, i) => nearby(v.x, v.z) ? <MemoizedSharedVehicle key={i} vehicle={v} /> : null)}
+    {snapshot.players.map(p => p.interior === interior ? <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={p.id === snapshot.self} observingRailway={observingRailway} /> : null)}
+    {interior === null && snapshot.npcs?.filter(p => nearby(p.x, p.z)).map(p => <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={false} />)}
+    {interior === null && snapshot.vehicles.map((v, i) => nearby(v.x, v.z) ? <MemoizedSharedVehicle key={i} vehicle={v} serverTime={snapshot.serverTime ?? 0} /> : null)}
   </>;
 }
