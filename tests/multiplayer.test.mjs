@@ -92,6 +92,12 @@ test('route validates input and authenticates two independent client sessions', 
   const snapshot = await (await send({ action: 'update', room: 'test', token: b.token, input: idle, interact: false })).json();
   assert.equal(snapshot.players.length, 2);
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { ...idle, forward: 99 }, interact: false })).status, 400);
+  assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { forward: 0.35, turn: -0.6, brake: false }, interact: false })).status, 200);
+  for (const axis of ['forward', 'turn']) {
+    for (const value of [1.01, -1.01, null, '0.5', true]) {
+      assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { ...idle, [axis]: value }, interact: false })).status, 400);
+    }
+  }
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { ...idle, targetPoint: { x: 'bad', z: 0 } }, interact: false })).status, 400);
   assert.equal((await send({ action: 'update', room: 'test', token: 'fake', input: idle, interact: false })).status, 401);
   assert.equal((await POST(new Request('http://localhost/api/world', { method: 'POST', headers: { origin: 'http://evil.test' }, body: '{}' }))).status, 400);
@@ -665,4 +671,26 @@ test('lightning only occurs in rain with delayed thunder and separated flashes',
     assert.ok(times[1] - times[0] >= 19000);
     assert.ok(times[2] - times[1] >= 19000);
   }
+});
+
+
+test('analog walking is proportional, frame-rate independent, and settles after release', async () => {
+  const { default: { advanceWalk } } = await import(pathToFileURL(path.join(temp, 'lib/walk-motion.js')).href);
+  const simulate = (hz, strength) => {
+    const motion = { speed: 0, turnSpeed: 0 };
+    let distance = 0, yaw = 0;
+    for (let i = 0; i < hz; i++) {
+      const step = advanceWalk(motion, strength, strength, 1 / hz);
+      distance += step.distance; yaw += step.yawDelta;
+    }
+    return { motion, distance, yaw };
+  };
+  const full = simulate(60, 1), half = simulate(60, 0.5), low = simulate(30, 0.5), high = simulate(120, 0.5);
+  assert.ok(Math.abs(half.distance * 2 - full.distance) < 1e-8);
+  assert.ok(Math.abs(half.yaw * 2 - full.yaw) < 1e-8);
+  assert.ok(Math.abs(low.distance - high.distance) < 1e-8);
+  assert.ok(Math.abs(low.yaw - high.yaw) < 1e-8);
+  for (let i = 0; i < 60; i++) advanceWalk(half.motion, 0, 0, 1 / 60);
+  assert.equal(half.motion.speed, 0);
+  assert.equal(half.motion.turnSpeed, 0);
 });

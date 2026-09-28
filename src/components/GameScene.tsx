@@ -245,7 +245,7 @@ export default function GameScene() {
       const speed = vehicleIndex === undefined || vehicleIndex === null ? null : snapshot?.vehicles[vehicleIndex]?.speed;
       if (speed === null || speed === undefined) return null;
       return (
-      <div style={{ position: 'absolute', bottom: 30, right: 30, background: 'rgba(0,0,0,0.8)', color: '#38bdf8', padding: '15px 25px', borderRadius: '12px', fontFamily: 'monospace', fontSize: '28px', fontWeight: 'bold', zIndex: 10, border: '2px solid rgba(56,189,248,0.3)', boxShadow: '0 0 15px rgba(56,189,248,0.2)', pointerEvents: 'none' }}>
+      <div className="speedometer">
         {Math.abs(Math.round(speed * 3.6))} <span style={{ fontSize: '14px', color: '#94a3b8' }}>KM/H</span>
       </div>
       );

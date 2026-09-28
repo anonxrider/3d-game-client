@@ -105,3 +105,13 @@ html, body, .game-container { height: 100dvh; }
 
 @media (max-height: 500px) and (any-pointer: coarse) { .touch-stick { width: 112px; } .touch-controls { bottom: max(10px, env(safe-area-inset-bottom)); } .touch-movement { gap: 5px; } .touch-actions { padding-bottom: 0; } .interaction-prompt { bottom: auto; } }
 @media (prefers-reduced-motion: reduce) { .touch-stick-thumb, .touch-action { transition: none; } }
+
+.speedometer { position: absolute; bottom: 30px; right: 30px; background: #000c; color: #38bdf8; padding: 15px 25px; border-radius: 12px; font: bold 28px monospace; z-index: 10; border: 2px solid #38bdf84d; box-shadow: 0 0 15px #38bdf833; pointer-events: none; }
+@media (any-pointer: coarse) {
+  .interaction-prompt { top: auto; bottom: calc(200px + env(safe-area-inset-bottom)); max-width: min(580px, calc(100vw - 160px)); left: auto; right: 16px; transform: none; }
+  .speedometer { bottom: calc(166px + env(safe-area-inset-bottom)); right: max(20px, env(safe-area-inset-right)); padding: 6px 12px; font-size: 20px; }
+}
+@media (max-height: 500px) and (any-pointer: coarse) {
+  .interaction-prompt { top: 10px; bottom: auto; left: 50%; right: auto; transform: translateX(-50%); max-width: 42vw; padding: 6px 10px; font-size: 10px; }
+  .speedometer { bottom: calc(152px + env(safe-area-inset-bottom)); }
+}

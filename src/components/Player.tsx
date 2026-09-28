@@ -158,16 +158,15 @@ export const clickTargetRef = { current: null as { x: number, z: number } | null
 
 export default function Player({ session, observingRailway = false, onSnapshot, onStatus, onConnection, onCount, onInterior }: { session: Session; observingRailway?: boolean; onSnapshot: (snapshot: Snapshot) => void; onStatus: (text: string) => void; onConnection: (text: string) => void; onCount: (count: number) => void; onInterior: (id: string | null) => void }) {
   const [snapshot, setSnapshot] = useState(session.snapshot);
-  const { keys, interactRef, movement } = useKeyboardControls();
+  const { keys, touchKeys, interactRef, movement, resetControls } = useKeyboardControls();
   const sequenceRef = useRef(0);
   const lastHornRef = useRef(0);
   const observingRef = useRef(observingRailway);
   useEffect(() => {
     observingRef.current = observingRailway;
     clickTargetRef.current = null;
-    keys.current.clear();
-    interactRef.current = false;
-  }, [observingRailway, keys, interactRef]);
+    resetControls();
+  }, [observingRailway, resetControls]);
   useEffect(() => {
     clickTargetRef.current = null;
     let stopped = false;
@@ -181,7 +180,7 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
     let notice = '', noticeUntil = 0;
     let riding = session.snapshot.players.find(p => p.id === session.snapshot.self)?.vehicle != null;
     let sentTarget: { point: { x: number; z: number }; sequence: number } | null = null;
-    const held = (...codes: string[]) => !observingRef.current && codes.some(code => keys.current.has(code));
+    const held = (...codes: string[]) => !observingRef.current && codes.some(code => keys.current.has(code) || touchKeys.current.has(code));
     const sendControls = () => {
       if (held('KeyH') && riding && performance.now() - lastHornRef.current > 500) {
         lastHornRef.current = performance.now(); playHorn();
@@ -190,7 +189,7 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
       if (performance.now() - lastReceived > 10000) { socket.close(); return; }
       if (socket.bufferedAmount > 4096) return;
       const destination = travelDestinationRef.current;
-      if (destination) { keys.current.clear(); clickTargetRef.current = null; interactRef.current = false; }
+      if (destination) { resetControls(); clickTargetRef.current = null; }
       const interact = !observingRef.current && interactRef.current;
       const forward = observingRef.current || destination ? 0 : MathUtils.clamp(Number(held('KeyW', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown')) + Math.round(movement.current.forward * 100) / 100, -1, 1);
       const turn = observingRef.current || destination ? 0 : MathUtils.clamp(Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'ArrowLeft')) + Math.round(movement.current.turn * 100) / 100, -1, 1);
@@ -271,6 +270,8 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
       ws.onclose = event => {
         if (stopped || socket !== ws) return;
         ready = false;
+        resetControls();
+        clickTargetRef.current = null;
         if (event.code === 4001 || event.code === 4002 || event.code === 1008) {
           onConnection(event.code === 4001 ? 'Session expired — leave and rejoin' : 'Connection closed — leave and rejoin');
           return;
@@ -284,13 +285,23 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
       if (socket && !ready && performance.now() - lastReceived > 10000) socket.close();
       sendControls();
     }, 25);
+    const stopInput = () => {
+      clickTargetRef.current = null;
+      resetControls();
+      sendControls();
+    };
+    const visibility = () => { if (document.hidden) stopInput(); };
+    window.addEventListener('blur', stopInput);
+    document.addEventListener('visibilitychange', visibility);
     connect();
     return () => {
+      window.removeEventListener('blur', stopInput);
+      document.removeEventListener('visibilitychange', visibility);
       stopped = true; travelDestinationRef.current = null;
       clearInterval(timer); clearTimeout(reconnect);
       socket?.close();
     };
-  }, [session, onSnapshot, keys, interactRef, movement, onStatus, onConnection, onCount, onInterior]);
+  }, [session, onSnapshot, keys, touchKeys, interactRef, movement, resetControls, onStatus, onConnection, onCount, onInterior]);
   const self = snapshot.players.find(p => p.id === snapshot.self);
   const interior = self?.interior ?? null;
   const nearby = (x: number, z: number) => Math.abs(x - (self?.x ?? 0)) < 150 && Math.abs(z - (self?.z ?? 0)) < 150;
