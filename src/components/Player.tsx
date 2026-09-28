@@ -192,6 +192,9 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
         if (!response.ok) throw new Error('Connection interrupted');
         const next: Snapshot = await response.json();
         if (stopped) return;
+        const latency = Math.round(performance.now() - started);
+        console.log(`Network Latency: ${latency}ms`);
+        
         if (travelDestinationRef.current === destination) travelDestinationRef.current = null;
         setSnapshot(next); onSnapshot(next); onCount(next.players.length); onConnection('Connected');
         const me = next.players.find(p => p.id === next.self)!;
