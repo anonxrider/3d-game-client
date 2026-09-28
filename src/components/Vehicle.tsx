@@ -6,62 +6,10 @@ function Box({ position, size, color }: { position: [number, number, number]; si
 
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Group, Vector3, SpotLight, Object3D } from 'three';
+import { SpotLight, Object3D } from 'three';
 
-export function Rider({ seated = false, color = "#38bdf8" }: { seated?: boolean; color?: string }) {
-  const groupRef = useRef<Group>(null);
-  const leftArmRef = useRef<Group>(null);
-  const rightArmRef = useRef<Group>(null);
-  const leftLegRef = useRef<Group>(null);
-  const rightLegRef = useRef<Group>(null);
-  const timeRef = useRef(0);
-  const lastPosRef = useRef({ x: 0, z: 0 });
-
-  useFrame((_, delta) => {
-    if (seated || !groupRef.current) return;
-    
-    // Auto-detect movement based on world position
-    const worldPos = new Vector3();
-    groupRef.current.getWorldPosition(worldPos);
-    const moving = Math.hypot(worldPos.x - lastPosRef.current.x, worldPos.z - lastPosRef.current.z) > 0.01;
-    lastPosRef.current.x = worldPos.x;
-    lastPosRef.current.z = worldPos.z;
-
-    timeRef.current += moving ? delta * 12 : 0;
-    
-    // Smooth transition
-    const alpha = 1 - Math.exp(-15 * delta);
-    const targetAngle = moving ? Math.sin(timeRef.current) * 0.9 : 0;
-    
-    if (leftArmRef.current) leftArmRef.current.rotation.x += (targetAngle - leftArmRef.current.rotation.x) * alpha;
-    if (rightArmRef.current) rightArmRef.current.rotation.x += (-targetAngle - rightArmRef.current.rotation.x) * alpha;
-    if (leftLegRef.current) leftLegRef.current.rotation.x += (-targetAngle - leftLegRef.current.rotation.x) * alpha;
-    if (rightLegRef.current) rightLegRef.current.rotation.x += (targetAngle - rightLegRef.current.rotation.x) * alpha;
-  });
-
-  return <group ref={groupRef}>
-    <Box position={[0, 1.45, 0]} size={[0.5, 0.5, 0.5]} color="#fcd34d" />
-    <Box position={[0, 1.55, -0.04]} size={[0.54, 0.35, 0.5]} color="#172554" />
-    <Box position={[0, 0.9, 0]} size={[0.6, 0.65, 0.35]} color={color} />
-    
-    <Box position={[-0.14, 1.46, 0.26]} size={[0.07, 0.07, 0.03]} color="#0f172a" />
-    <Box position={[0.14, 1.46, 0.26]} size={[0.07, 0.07, 0.03]} color="#0f172a" />
-
-    <group position={[-0.4, 1.1, 0]} rotation={[seated ? -0.9 : 0, 0, 0]} ref={leftArmRef}>
-      <Box position={[0, -0.25, 0]} size={[0.18, 0.6, 0.18]} color="#fcd34d" />
-    </group>
-    <group position={[0.4, 1.1, 0]} rotation={[seated ? -0.9 : 0, 0, 0]} ref={rightArmRef}>
-      <Box position={[0, -0.25, 0]} size={[0.18, 0.6, 0.18]} color="#fcd34d" />
-    </group>
-
-    <group position={[-0.2, 0.6, 0]} rotation={[seated ? -1.1 : 0, 0, 0]} ref={leftLegRef}>
-      <Box position={[0, -0.3, 0]} size={[0.23, 0.6, 0.25]} color="#1e293b" />
-    </group>
-    <group position={[0.2, 0.6, 0]} rotation={[seated ? -1.1 : 0, 0, 0]} ref={rightLegRef}>
-      <Box position={[0, -0.3, 0]} size={[0.23, 0.6, 0.25]} color="#1e293b" />
-    </group>
-  </group>;
-}
+import Rider from './HumanCharacter';
+export { default as Rider } from './HumanCharacter';
 
 import { headLightMaterial, lightingState } from './Lighting';
 
@@ -119,6 +67,6 @@ export default function Vehicle({ kind, color, occupied }: { kind: 'car' | 'bike
         <mesh><cylinderGeometry args={[cycle ? 0.28 : 0.19, cycle ? 0.28 : 0.19, bike || cycle ? 0.215 : 0.34, 12]} /><meshStandardMaterial color="#94a3b8" metalness={0.7} roughness={0.3} /></mesh>
       </group>
     ))}
-    {occupied && (bike || cycle) && <group position={[0, 0.34, -0.18]}><Rider seated /></group>}
+    {occupied && (bike || cycle) && <group position={[0, 0.34, -0.18]}><Rider seated riding /></group>}
   </group>;
 }

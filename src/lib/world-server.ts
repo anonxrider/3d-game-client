@@ -1,3 +1,4 @@
+import { trafficAllows } from './police';
 import { destinations } from './destinations';
 import { railwayStations, RAIL_HEIGHT } from './railway';
 import { inAirport, inAirportOperations } from './airport';
@@ -85,7 +86,7 @@ export class WorldServer {
     // Walk along a clear road verge instead of targeting the middle of houses.
     const gz = Number(npc.cell?.split(':')[1] ?? 0);
     const index = Number(npc.person.id.split('-').at(-1) ?? 0);
-    const start = gz * POPULATION_CELL_SIZE + 30 + Math.floor(index / 2) * 80;
+    const start = gz * POPULATION_CELL_SIZE + (npc.person.duty === 'patrol' ? 14 : 30 + Math.floor(index / 2) * 80);
     return { x: npc.person.x, z: npc.target.z > start ? start : start + 24 };
   }
   syncPopulation(room: Room) {
@@ -114,11 +115,12 @@ export class WorldServer {
     for (const cell of cells) {
       const [gx, gz] = cell.split(':').map(Number);
       if (!room.npcs.some(npc => npc.cell === cell)) {
-        for (let i = 0; i < 4; i++) {
-          const x = gx * POPULATION_CELL_SIZE + 46 + (i % 2) * 80;
-          const z = gz * POPULATION_CELL_SIZE + 30 + Math.floor(i / 2) * 80;
+        for (let i = 0; i < 6; i++) {
+          const x = gx * POPULATION_CELL_SIZE + (i === 5 ? 44.8 : 46 + (i % 2) * 80);
+          const z = gz * POPULATION_CELL_SIZE + (i === 5 ? 44.8 : i === 4 ? 14 : 30 + Math.floor(i / 2) * 80);
           if (inAirport(x, z) || this.blocked(room, x, z, 0.4)) continue;
           const person: Person = { id: `npc-${cell}-${i}`, name: NPC_NAMES[Math.abs(gx + gz + i) % NPC_NAMES.length], color: colors[Math.abs(gx - gz + i) % colors.length], x, z, yaw: 0, vehicle: null, seat: null, interior: null, message: '', score: 0, unlocked: [] };
+          if (i >= 4) { person.duty = i === 5 ? 'traffic' : 'patrol'; person.name = i === 5 ? 'Traffic Police' : 'Police Officer'; person.color = i === 5 ? '#e6f0cf' : '#172554'; }
           room.npcs.push({ person, target: { x, z: z + 24 }, wait: i * 0.4, cell });
         }
       }
@@ -132,7 +134,7 @@ export class WorldServer {
         if (this.blocked(room, x, z, CAR_COLLISION_RADIUS) || [...room.players.values()].some(m => Math.hypot(m.person.x - x, m.person.z - z) < 8)) continue;
         const next = (i + 1) % points.length;
         const yaw = Math.atan2(points[next].x - x, points[next].z - z);
-        const vehicle: CarState = { kind: 'car', color: '#38bdf8', x, z, yaw, speed: TRAFFIC_SPEED, owner: null, autopilot: true };
+        const vehicle: CarState = { police: i === 0, kind: 'car', color: i === 0 ? '#f1f5f9' : '#38bdf8', x, z, yaw, speed: TRAFFIC_SPEED, owner: null, autopilot: true };
         const index = room.trafficPool.pop() ?? room.vehicles.length;
         room.vehicles[index] = vehicle;
         room.trafficRoutes.set(index, { points, next });
@@ -149,6 +151,7 @@ export class WorldServer {
         continue;
       }
       const p = npc.person;
+      if (p.duty === 'traffic') { p.yaw = trafficAllows(room.tick, true) ? 0 : Math.PI / 2; continue; }
       const dx = npc.target.x - p.x;
       const dz = npc.target.z - p.z;
       const distance = Math.hypot(dx, dz);
@@ -191,6 +194,11 @@ export class WorldServer {
     const step = Math.min(distance, TRAFFIC_SPEED * Math.max(0, Math.min(dt, 0.25)));
     const nextX = vehicle.x + dx / distance * step;
     const nextZ = vehicle.z + dz / distance * step;
+    // Officers control the crossing at the first corner of each patrol loop.
+    const crossing = route.points[0];
+    const approaching = Math.hypot(vehicle.x - crossing.x, vehicle.z - crossing.z);
+    const controlled = room.npcs.some(npc => npc.person.duty === 'traffic' && Math.hypot(npc.person.x - crossing.x, npc.person.z - crossing.z) < 10);
+    if (controlled && route.next === 0 && approaching > 5 && approaching < 12 && !trafficAllows(room.tick, Math.abs(dz) > Math.abs(dx))) { vehicle.speed = 0; return; }
     // A blocked lane means wait, never reverse or steer across grass/buildings.
     if (!isTrafficRoad(nextX, nextZ) || this.blocked(room, nextX, nextZ, this.vehicleRadius(vehicle.kind), index)
       || [...room.players.values()].some(m => m.person.interior === null && m.person.vehicle === null && Math.hypot(nextX - m.person.x, nextZ - m.person.z) < 2)) {

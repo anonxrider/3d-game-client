@@ -7,7 +7,7 @@ import ts from 'typescript';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ethera-tests-'));
-for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/walk-motion', 'lib/world-runtime', 'lib/world-server', 'app/api/world/route']) {
+for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/police', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/walk-motion', 'lib/world-runtime', 'lib/world-server', 'app/api/world/route']) {
   const destination = path.join(temp, `${file}.js`);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   const source = fs.readFileSync(path.join(__dirname, '../src', `${file}.ts`), 'utf8').replace("'@/lib/world-runtime'", "'../../../lib/world-runtime'");
@@ -335,7 +335,7 @@ test('separated players keep their populations and abandoned traffic slots are r
     world.update('spread', a.token, idle, false, 1000);
   }
   assert.ok(room.vehicles.length <= capacity + 4, 'travel reuses slots rather than growing forever');
-  assert.ok(room.npcs.length <= room.populationCells.size * 4);
+  assert.ok(room.npcs.length <= room.populationCells.size * 6);
 });
 
 
@@ -697,4 +697,39 @@ test('analog walking is proportional, frame-rate independent, and settles after 
   for (let i = 0; i < 60; i++) advanceWalk(half.motion, 0, 0, 1 / 60);
   assert.equal(half.motion.speed, 0);
   assert.equal(half.motion.turnSpeed, 0);
+});
+
+
+test('police spawn with synchronized roles and traffic officers stay at their crossing', () => {
+  const world = new WorldServer();
+  const joined = world.join('police', 'Visitor', 1000);
+  const first = world.update('police', joined.token, idle, false, 1100);
+  assert.ok(first.vehicles.some(v => v.police && v.autopilot));
+  assert.ok(first.npcs.some(p => p.duty === 'patrol'));
+  const officer = first.npcs.find(p => p.duty === 'traffic');
+  assert.ok(officer);
+  const later = world.update('police', joined.token, idle, false, 5100);
+  const same = later.npcs.find(p => p.id === officer.id);
+  assert.equal(same.x, officer.x);
+  assert.equal(same.z, officer.z);
+});
+
+
+test('traffic police stop approaching cars on red and release them on green', () => {
+  const world = new WorldServer();
+  world.join('signals', 'Visitor', 1000);
+  const room = world.rooms.get('signals');
+  const officer = room.npcs.find(n => n.person.duty === 'traffic');
+  const x = officer.person.x - 5.8, z = officer.person.z - 3.8;
+  const index = room.vehicles.length;
+  const vehicle = { kind: 'car', color: '#fff', x: x + 9, z, yaw: -Math.PI / 2, speed: 8, owner: null, autopilot: true };
+  room.vehicles.push(vehicle);
+  room.trafficRoutes.set(index, { points: [{ x, z }, { x, z: z + 120 }], next: 0 });
+  room.tick = 1000;
+  world.steerTraffic(room, vehicle, index, 0.1);
+  assert.equal(vehicle.speed, 0);
+  assert.equal(vehicle.x, x + 9);
+  room.tick = 11000;
+  world.steerTraffic(room, vehicle, index, 0.1);
+  assert.ok(vehicle.x < x + 9);
 });

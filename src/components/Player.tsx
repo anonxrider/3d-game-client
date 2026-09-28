@@ -1,4 +1,5 @@
 "use client";
+import { PoliceOfficer, PoliceLights } from './Police';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -121,7 +122,7 @@ function Actor({ person, self, serverTime, observingRailway = false }: { person:
     }
   });
   return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]} visible={!!person}>
-    <group ref={bodyRef} visible={person?.vehicle === null}><Rider color={initialColor} seated={person?.seat !== null} /></group>
+    <group ref={bodyRef} visible={person?.vehicle === null}>{person.duty ? <PoliceOfficer duty={person.duty} serverTime={serverTime} /> : <Rider color={initialColor} seated={person?.seat !== null} />}</group>
     <Html position={[0, person?.vehicle === null ? 2.2 : 2.8, 0]} center style={{ pointerEvents: 'none' }}>
       <span className={`player-label${self ? ' player-label-self' : ''}`}>{initialName}{self ? ' (you)' : ''}</span>
     </Html>
@@ -149,7 +150,7 @@ function SharedVehicle({ vehicle, serverTime }: { vehicle: CarState; serverTime:
     g.position.y = getTerrainHeight(g.position.x, g.position.z) - 0.5;
     g.rotation.y = pose.yaw;
   });
-  return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]}><Vehicle kind={kind} color={color} occupied={occupied} /></group>;
+  return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]}><Vehicle kind={kind} color={vehicle.police ? "#f1f5f9" : color} occupied={occupied} />{vehicle.police && <PoliceLights serverTime={serverTime} />}</group>;
 }
 const MemoizedSharedVehicle = React.memo(SharedVehicle);
 
