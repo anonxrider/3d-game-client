@@ -173,18 +173,41 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
     let stopped = false;
     let timeout: ReturnType<typeof setTimeout>;
     let notice = '', noticeUntil = 0;
+    let lastSent = -Infinity, settleUntil = 0;
+    let previousControls = '';
+    let vehicleMoving = false;
+    let riding = session.snapshot.players.find(p => p.id === session.snapshot.self)?.vehicle != null;
     const controller = new AbortController();
     const update = async () => {
       const started = performance.now();
-      const sequence = ++sequenceRef.current;
       const held = (...codes: string[]) => !observingRef.current && codes.some(code => keys.current.has(code));
+      if (held('KeyH') && performance.now() - lastHornRef.current > 500) {
+        // Vehicle membership is kept current after each successful snapshot.
+        if (riding) { lastHornRef.current = performance.now(); playHorn(); }
+      }
       const destination = travelDestinationRef.current;
       if (destination) { keys.current.clear(); clickTargetRef.current = null; interactRef.current = false; }
       const interact = !observingRef.current && interactRef.current;
-      interactRef.current = false;
       const forward = Number(held('KeyW', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown'));
       const turn = Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'ArrowLeft'));
       if (forward !== 0 || turn !== 0) clickTargetRef.current = null;
+      const brake = observingRef.current || held('Space');
+      const targetPoint = observingRef.current ? null : clickTargetRef.current;
+      const controls = JSON.stringify([forward, turn, brake, targetPoint]);
+      const controlsChanged = controls !== previousControls;
+      const active = forward !== 0 || turn !== 0 || targetPoint !== null || interact || destination !== null;
+      // Check input locally at 20 Hz, but only use the network while active.
+      // Send releases immediately and keep sampling briefly while walking eases
+      // to a stop. Idle heartbeats stay below the server's 15-second session TTL.
+      if (controlsChanged || active) settleUntil = started + 750;
+      if (!controlsChanged && !active && !vehicleMoving && started >= settleUntil && started - lastSent < 5000) {
+        timeout = setTimeout(update, 50);
+        return;
+      }
+      previousControls = controls;
+      lastSent = started;
+      interactRef.current = false;
+      const sequence = ++sequenceRef.current;
       try {
         const response = await fetch('/api/world', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
@@ -192,8 +215,8 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
             destination: destination ?? undefined,
             forward,
             turn,
-            brake: observingRef.current || held('Space'),
-            targetPoint: observingRef.current ? null : clickTargetRef.current,
+            brake,
+            targetPoint,
           } }),
         });
         if (stopped) return;
@@ -205,6 +228,12 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
         if (travelDestinationRef.current === destination) travelDestinationRef.current = null;
         setSnapshot({ ...next, serverTime: next.serverTime ?? performance.now() }); onSnapshot(next); onCount(next.players.length); onConnection('Connected');
         const me = next.players.find(p => p.id === next.self)!;
+        riding = me.vehicle !== null;
+        const vehicle = me.vehicle === null ? undefined : next.vehicles[me.vehicle];
+        vehicleMoving = !!vehicle && Math.abs(vehicle.speed) > 0.02;
+        // Only clear the exact click this response acknowledges; the user may
+        // have chosen a different destination while the request was in flight.
+        if (targetPoint && clickTargetRef.current === targetPoint && next.targetPoint === null) clickTargetRef.current = null;
         onInterior(me.interior);
         if (me.message) { notice = me.message; noticeUntil = Date.now() + 2000; }
         const target = nearbyInteraction(me.x, me.z, next.vehicles);
@@ -215,11 +244,6 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
           isVehicleFull = occupants >= (v.kind === 'car' ? 4 : 2);
         }
         const isDriver = me.vehicle !== null && next.vehicles[me.vehicle].owner === me.id;
-        
-        if (me.vehicle !== null && held('KeyH') && performance.now() - lastHornRef.current > 500) {
-          lastHornRef.current = performance.now();
-          playHorn();
-        }
         
         const hint = me.station ? 'Railway platform · Walk around · E to return to street' : me.seat !== null ? 'Sitting · Press E to stand up'
           : me.interior !== null ? 'Inside · WASD to walk · Approach EXIT and press E to leave'

@@ -396,7 +396,8 @@ export class WorldServer {
     return { token, snapshot: this.snapshot(room, id) };
   }
   snapshot(room: Room, self: string): Snapshot {
-    return { serverTime: room.tick, self, players: [...room.players.values()].map(m => ({ ...m.person, y: m.person.station ? RAIL_HEIGHT + 1.05 : m.person.interior === null ? getTerrainHeight(m.person.x, m.person.z) : 0 })), vehicles: room.vehicles.map(v => ({ ...v })), coins: room.coins.map(c => ({ ...c })), npcs: room.npcs.map(npc => ({ ...npc.person, y: getTerrainHeight(npc.person.x, npc.person.z) })) };
+    const member = [...room.players.values()].find(m => m.person.id === self);
+    return { targetPoint: member?.input.targetPoint ?? null, serverTime: room.tick, self, players: [...room.players.values()].map(m => ({ ...m.person, y: m.person.station ? RAIL_HEIGHT + 1.05 : m.person.interior === null ? getTerrainHeight(m.person.x, m.person.z) : 0 })), vehicles: room.vehicles.map(v => ({ ...v })), coins: room.coins.map(c => ({ ...c })), npcs: room.npcs.map(npc => ({ ...npc.person, y: getTerrainHeight(npc.person.x, npc.person.z) })) };
   }
   update(name: string, token: string, input: Input, interact: boolean, now = Date.now(), sequence?: number) {
     this.cleanup(now);
