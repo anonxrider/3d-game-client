@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ethera multiplayer neighborhood
 
-## Getting Started
+Run `npm install` and `npm run dev`, then open http://localhost:3000.
+Enter a name and a room code. Players using the same server and room share the
+world, cars, and bikes. Use **Copy invite** to share the room URL. Open two browser
+tabs with different names to try it locally. Rooms support up to 12 players.
 
-First, run the development server:
+- WASD / arrow keys: walk; accelerate, reverse, and steer while riding.
+- E: interact with the nearest seat, building entrance, or vehicle.
+- Benches/chairs: E to sit, then E to stand; one player per seat.
+- Homes/hotel: E at the front door to enter. Walk to the green EXIT marker and press E to leave. Players in the same building share its interior.
+- Vehicles: E to ride; brake before pressing E to exit.
+- Space: brake.
+- Leave: leave the room and release your vehicle.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+For other devices on your Wi-Fi, run `npm run dev -- --hostname 0.0.0.0` and open
+`http://YOUR-LAN-IP:3000` on each device. A localhost invite only works on your own
+computer; copy invitations from the LAN address when playing across devices.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Hosting and state
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+This implementation uses a server-authoritative in-memory simulation and HTTP
+snapshot polling approximately 10 times per second, with client-side smoothing.
+Clients send controls, not positions. Vehicle claims, collisions, and movement
+are resolved on the server. Idle input stops after 500 ms; disconnected players
+expire after 15 seconds and release their vehicles. Empty rooms are discarded.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Deploy with `npm run build` and `npm start` on **one persistent Node.js instance**
+and share its public URL. Rooms reset on process restart. This implementation
+is not suitable for distributed/serverless instances without a shared room
+service or sticky routing. It is a small multiplayer prototype, with no accounts,
+persistent progress, or production abuse protection. Internet play requires a
+reachable hosted server; this repository does not deploy one automatically.
 
-## Learn More
+## Checks
 
-To learn more about Next.js, take a look at the following resources:
+- `npm run lint`
+- `npx tsc --noEmit`
+- `node --test tests/multiplayer.test.mjs`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Tests cover two-client visibility, movement, room isolation, exclusive vehicle
+ownership, driving, safe exit, disconnect cleanup, capacity, and API validation.
