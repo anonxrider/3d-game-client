@@ -69,7 +69,9 @@ function Actor({ person, self, observingRailway = false }: { person: Person; sel
   useFrame(({ camera }, delta) => {
     const group = groupRef.current;
     if (!group || !person) return;
-    const dt = Math.min(delta, 0.05), alpha = 1 - Math.exp(-14 * dt);
+    const dt = Math.min(delta, 0.05);
+    // Smooth out movement to hide Vercel's serverless latency jitter for the local player
+    const alpha = 1 - Math.exp(-(self ? 6 : 14) * dt);
     const moving = Math.hypot(group.position.x - person.x, group.position.z - person.z) > 0.025;
     targetRef.current.set(person.x, (person.y ?? (person.interior === null ? getTerrainHeight(person.x, person.z) : 0)) - 0.5, person.z);
     const changedLocation = locationRef.current !== person.interior || Math.hypot(group.position.x - person.x, group.position.z - person.z) > 60;
