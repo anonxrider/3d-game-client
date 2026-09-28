@@ -139,6 +139,7 @@ export default function GameScene() {
   const [copied, setCopied] = useState(false);
   const [focusedAirport, setFocusedAirport] = useState(false);
   const [focusedTrain, setFocusedTrain] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const selfPlayer = snapshot?.players.find(p => p.id === snapshot.self);
   const playerCenter = selfPlayer?.vehicle != null
     ? snapshot?.vehicles[selfPlayer.vehicle] ?? selfPlayer
@@ -204,23 +205,32 @@ export default function GameScene() {
 
   return (
     <>
-    <div className="multiplayer-bar">
-      <span><strong>{session.room}</strong> · {count}/12 players · 🌟 Score: {snapshot?.players.find(p => p.id === snapshot.self)?.score || 0} · {connection} · {dayCycle.label} {dayCycle.period} · {dayCycle.nextPeriod} in {dayCycle.countdown} · {getWeather(snapshot?.serverTime ?? 0).label}</span>
-      <label className="travel-menu">Travel to
-        <select aria-label="Travel destination" value="" onChange={event => {
-          if (!event.target.value) return;
-          setFocusedTrain(null); setFocusedAirport(false);
-          clickTargetRef.current = null;
-          travelDestinationRef.current = event.target.value;
-        }}>
-          <option value="">Choose a place…</option>
-          {destinations.map(destination => <option key={destination.id} value={destination.id}>{destination.name}</option>)}
-        </select>
-      </label>
-      {interior === null && <button aria-pressed={observingRailway} onClick={() => { setFocusedAirport(false); setFocusedTrain(observingRailway ? null : nearestTrainIndex(playerCenter.x, (snapshot?.serverTime ?? 0) / 1000)); }}>{observingRailway ? 'Back to player' : 'View train'}</button>}
-      {interior === null && <button aria-pressed={observingAirport} onClick={() => { setFocusedTrain(null); setFocusedAirport(!observingAirport); }}>{observingAirport ? 'Back to player' : 'View airport'}</button>}
-      <button onClick={async () => { try { await navigator.clipboard.writeText(window.location.href); setCopied(true); } catch { setConnection('Copy the room URL from your address bar'); } }}>{copied ? 'Link copied' : 'Copy invite'}</button>
-      <button onClick={() => { void fetch('/api/world', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: JSON.stringify({ action: 'leave', room: session.room, token: session.token }) }).catch(() => {}); setSession(null); setInterior(null); setCopied(false); setFocusedTrain(null); setFocusedAirport(false); }}>Leave</button>
+    <div className={`multiplayer-bar ${menuOpen ? 'menu-open' : ''}`}>
+      <div className="multiplayer-bar-header">
+        <span className="status-text">
+          <strong>{session.room}</strong> · 🌟 {snapshot?.players.find(p => p.id === snapshot.self)?.score || 0}
+          <span className="status-details"> · {count}/12 players · {connection} · {dayCycle.label} {dayCycle.period} · {dayCycle.nextPeriod} in {dayCycle.countdown} · {getWeather(snapshot?.serverTime ?? 0).label}</span>
+        </span>
+        <button className="mobile-menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
+      </div>
+      <div className="multiplayer-bar-controls">
+        <label className="travel-menu">Travel to
+          <select aria-label="Travel destination" value="" onChange={event => {
+            if (!event.target.value) return;
+            setFocusedTrain(null); setFocusedAirport(false);
+            clickTargetRef.current = null;
+            travelDestinationRef.current = event.target.value;
+            setMenuOpen(false);
+          }}>
+            <option value="">Choose a place…</option>
+            {destinations.map(destination => <option key={destination.id} value={destination.id}>{destination.name}</option>)}
+          </select>
+        </label>
+        {interior === null && <button aria-pressed={observingRailway} onClick={() => { setFocusedAirport(false); setFocusedTrain(observingRailway ? null : nearestTrainIndex(playerCenter.x, (snapshot?.serverTime ?? 0) / 1000)); setMenuOpen(false); }}>{observingRailway ? 'Back to player' : 'View train'}</button>}
+        {interior === null && <button aria-pressed={observingAirport} onClick={() => { setFocusedTrain(null); setFocusedAirport(!observingAirport); setMenuOpen(false); }}>{observingAirport ? 'Back to player' : 'View airport'}</button>}
+        <button onClick={async () => { try { await navigator.clipboard.writeText(window.location.href); setCopied(true); } catch { setConnection('Copy the room URL from your address bar'); } }}>{copied ? 'Link copied' : 'Copy invite'}</button>
+        <button onClick={() => { void fetch('/api/world', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: JSON.stringify({ action: 'leave', room: session.room, token: session.token }) }).catch(() => {}); setSession(null); setInterior(null); setCopied(false); setFocusedTrain(null); setFocusedAirport(false); }}>Leave</button>
+      </div>
     </div>
     <div className="interaction-prompt" role="status">
       <strong className="current-place">{selfPlayer?.station ? destinations.find(d => d.id === selfPlayer.station)?.name : interior ? buildings.find(b => b.id === interior)?.name : (inAirport(renderCenter.x, renderCenter.z) ? airport.name : mountains.find(m => Math.abs(renderCenter.x - m.x) + Math.abs(renderCenter.z - m.z) <= m.radius)?.name ?? getAreaName(renderCenter.x, renderCenter.z))}</strong>
