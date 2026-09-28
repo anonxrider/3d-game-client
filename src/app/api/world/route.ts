@@ -31,7 +31,7 @@ async function saveAwardsBackground() {
 }
 
 export async function POST(request: Request) {
-  if (request.headers.get('origin') && request.headers.get('origin') !== new URL(request.url).origin) return Response.json({ error: 'Invalid origin' }, { status: 403 });
+  // Origin check removed: Render's reverse proxy causes request.url to have a different protocol/host than the actual Origin header.
   const raw = await request.text();
   if (raw.length > 2048) return Response.json({ error: 'Request too large' }, { status: 413 });
   let data;
