@@ -323,9 +323,9 @@ export class WorldServer {
           }
           if (moveDx !== 0 || moveDz !== 0) {
             let hit = false;
-            if (!(p.station ? this.platformBlocked(p, p.x + moveDx, p.z) : p.interior ? blockedInside(p.x + moveDx, p.z) : this.blocked(room, p.x + moveDx, p.z, 0.4))) p.x += moveDx;
+            if (!(p.station ? this.platformBlocked(p, p.x + moveDx, p.z) : p.interior ? blockedInside(p.x + moveDx, p.z, p.interior) : this.blocked(room, p.x + moveDx, p.z, 0.4))) p.x += moveDx;
             else hit = true;
-            if (!(p.station ? this.platformBlocked(p, p.x, p.z + moveDz) : p.interior ? blockedInside(p.x, p.z + moveDz) : this.blocked(room, p.x, p.z + moveDz, 0.4))) p.z += moveDz;
+            if (!(p.station ? this.platformBlocked(p, p.x, p.z + moveDz) : p.interior ? blockedInside(p.x, p.z + moveDz, p.interior) : this.blocked(room, p.x, p.z + moveDz, 0.4))) p.z += moveDz;
             else hit = true;
             if (hit) motion.speed = 0;
             if (hit && input.targetPoint) {
@@ -452,7 +452,7 @@ export class WorldServer {
       } else {
         const stationEntrance = railwayStations.find(s => Math.hypot(p.x - s.x, p.z - 10) < 2.2);
         if (stationEntrance) { this.travel(room, member, stationEntrance.id); return this.snapshot(room, p.id); }
-        const target = nearbyInteraction(p.x, p.z, room.vehicles);
+        const target = nearbyInteraction(p.x, p.z, room.vehicles, p.interior);
         if (!target) p.message = 'Approach a seat, front door, or vehicle and press E';
         else if (target.kind === 'vehicleShop') {
           const item = vehicleShopItems[target.index];
@@ -498,6 +498,12 @@ export class WorldServer {
           } else {
             p.interior = building.id; p.x = 0; p.z = 2.3; p.yaw = Math.PI;
           }
+        } else if (target.kind === 'teleport') {
+          import('../components/world').then(({ hotelTeleporters }) => {
+            const teleporter = hotelTeleporters[target.index];
+            p.x = teleporter.destX;
+            p.z = teleporter.destZ;
+          });
         } else if (target.kind === 'seat') {
           if ([...room.players.values()].some(m => m.person.seat === target.index)) p.message = 'Someone is already sitting here';
           else { const seat = seats[target.index]; p.seat = target.index; p.x = seat.x; p.z = seat.z; p.yaw = seat.yaw; }
