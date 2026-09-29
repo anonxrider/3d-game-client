@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Snapshot } from '@/lib/multiplayer';
-import { Html } from '@react-three/drei';
 
 export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -215,69 +214,65 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
 
   if (!audioEnabled) {
     return (
-      <Html fullscreen zIndexRange={[1000, 0]} style={{ pointerEvents: 'none' }}>
-        <div style={{
-          position: 'absolute', top: '20px', right: '20px', zIndex: 1000,
-          background: 'rgba(0,0,0,0.7)', padding: '10px 20px', borderRadius: '8px',
-          color: 'white', display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'auto'
-        }}>
-          <span>Voice Chat Offline</span>
-          <button onClick={() => setAudioEnabled(true)}
-            style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>
-            Enable
-          </button>
-        </div>
-      </Html>
+      <div style={{
+        position: 'absolute', top: '20px', right: '20px', zIndex: 1000,
+        background: 'rgba(0,0,0,0.7)', padding: '10px 20px', borderRadius: '8px',
+        color: 'white', display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'auto'
+      }}>
+        <span>Voice Chat Offline</span>
+        <button onClick={() => setAudioEnabled(true)}
+          style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>
+          Enable
+        </button>
+      </div>
     );
   }
 
   return (
-    <Html fullscreen zIndexRange={[1000, 0]} style={{ pointerEvents: 'none' }}>
-      <div style={{
-        position: 'absolute', top: '20px', right: '20px', zIndex: 1000,
-        background: 'rgba(0,0,0,0.6)', padding: '15px', borderRadius: '8px',
-        color: 'white', minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'auto'
-      }}>
-        <div style={{ fontWeight: 'bold', color: '#4CAF50', borderBottom: '1px solid #444', paddingBottom: '5px' }}>
-          Voice Active (Local: {stream ? 'Mic On' : 'Connecting...'})
-        </div>
+    <div style={{
+      position: 'absolute', top: '20px', right: '20px', zIndex: 1000,
+      background: 'rgba(0,0,0,0.6)', padding: '15px', borderRadius: '8px',
+      color: 'white', minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'auto'
+    }}>
+      <div style={{ fontWeight: 'bold', color: '#4CAF50', borderBottom: '1px solid #444', paddingBottom: '5px' }}>
+        Voice Active (Local: {stream ? 'Mic On' : 'Connecting...'})
+      </div>
 
-        {incomingOffers.size > 0 && (
-          <div style={{ background: 'rgba(255, 165, 0, 0.2)', padding: '10px', borderRadius: '4px' }}>
-            <div style={{ fontSize: '12px', marginBottom: '5px', color: '#FFD700' }}>Incoming Calls:</div>
-            {Array.from(incomingOffers.keys()).map(id => {
-              const p = snapshot.players.find(p => p.id === id);
-              return (
-                <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                  <span>{p ? p.name : id}</span>
-                  <div style={{ display: 'flex', gap: '5px' }}>
-                    <button onClick={() => acceptCall(id)} style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Accept</button>
-                    <button onClick={() => declineCall(id)} style={{ background: '#f44336', border: 'none', color: 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Decline</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <div>
-          <div style={{ fontSize: '12px', marginBottom: '5px', color: '#aaa' }}>Nearby Players:</div>
-          {nearbyPlayers.length === 0 && <div style={{ fontSize: '12px', color: '#666' }}>No one nearby</div>}
-          {nearbyPlayers.map(p => {
-            const isActive = activeCalls.has(p.id);
-            const hasIncoming = incomingOffers.has(p.id);
+      {incomingOffers.size > 0 && (
+        <div style={{ background: 'rgba(255, 165, 0, 0.2)', padding: '10px', borderRadius: '4px' }}>
+          <div style={{ fontSize: '12px', marginBottom: '5px', color: '#FFD700' }}>Incoming Calls:</div>
+          {Array.from(incomingOffers.keys()).map(id => {
+            const p = snapshot.players.find(p => p.id === id);
             return (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', marginBottom: '5px' }}>
-                <span>{p.name}</span>
-                {!isActive && !hasIncoming && (
-                  <button onClick={() => callPlayer(p.id)} style={{ background: '#2196F3', border: 'none', color: 'white', padding: '2px 8px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Call</button>
-                )}
-                {isActive && <span style={{ color: '#4CAF50', fontSize: '12px' }}>In Call</span>}
+              <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                <span>{p ? p.name : id}</span>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <button onClick={() => acceptCall(id)} style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Accept</button>
+                  <button onClick={() => declineCall(id)} style={{ background: '#f44336', border: 'none', color: 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Decline</button>
+                </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      <div>
+        <div style={{ fontSize: '12px', marginBottom: '5px', color: '#aaa' }}>Nearby Players:</div>
+        {nearbyPlayers.length === 0 && <div style={{ fontSize: '12px', color: '#666' }}>No one nearby</div>}
+        {nearbyPlayers.map(p => {
+          const isActive = activeCalls.has(p.id);
+          const hasIncoming = incomingOffers.has(p.id);
+          return (
+            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', marginBottom: '5px' }}>
+              <span>{p.name}</span>
+              {!isActive && !hasIncoming && (
+                <button onClick={() => callPlayer(p.id)} style={{ background: '#2196F3', border: 'none', color: 'white', padding: '2px 8px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Call</button>
+              )}
+              {isActive && <span style={{ color: '#4CAF50', fontSize: '12px' }}>In Call</span>}
+            </div>
+          );
+        })}
       </div>
-    </Html>
+    </div>
   );
 }
