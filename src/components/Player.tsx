@@ -4,7 +4,6 @@ import { useMobileControls } from './useMobileControls';
 import VehicleAudio from './VehicleAudio';
 import { EmergencyVehicle, EmergencyWorker } from './EmergencyServices';
 import { PoliceOfficer, PoliceLights } from './Police';
-import WebRTCVoice from './WebRTCVoice';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -326,7 +325,6 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
   const interior = self?.interior ?? null;
   const nearby = (x: number, z: number) => Math.abs(x - (self?.x ?? 0)) < (mobile ? 85 : 150) && Math.abs(z - (self?.z ?? 0)) < (mobile ? 85 : 150);
   return <>
-    <WebRTCVoice snapshot={snapshot} />
     <VehicleAudio snapshot={snapshot} />
     {snapshot.players.map(p => p.interior === interior ? <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={p.id === snapshot.self} observingRailway={observingRailway} /> : null)}
     {interior === null && snapshot.npcs?.filter(p => nearby(p.x, p.z)).map(p => <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={false} />)}

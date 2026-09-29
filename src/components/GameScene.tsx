@@ -23,6 +23,7 @@ import { airport, inAirport } from "@/lib/airport";
 import Railway from "./Railway";
 import { getTrainState, nearestTrainIndex, railwayStations } from "@/lib/railway";
 import type { Mesh } from "three";
+import WebRTCVoice from "./WebRTCVoice";
 
 type AuthUser = { name: string; email: string };
 
@@ -254,6 +255,8 @@ export default function GameScene() {
       </div>
       );
     })()}
+
+    {snapshot && <WebRTCVoice snapshot={snapshot} />}
 
     <Canvas
       shadows={false}
