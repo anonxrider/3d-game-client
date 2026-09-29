@@ -192,7 +192,7 @@ export function hitsStreetProp(x: number, z: number, radius: number) {
 }
 
 export const buildings = [
-  ...houses.filter(h => h.type !== 'playground').map((h, i) => ({ id: `${h.type}-${i}`, name: h.name, x: h.x, z: h.type === 'hospital' ? h.z + 6.6 : h.z + 4.1, cost: h.type === 'house' ? 50 + (i % 5) * 20 : 0 })),
+  ...houses.map((h, i) => ({ id: `${h.type}-${i}`, name: h.name, x: h.x, z: h.type === 'hospital' ? h.z + 6.6 : h.type === 'playground' ? h.z : h.z + 4.1, cost: h.type === 'house' ? 50 + (i % 5) * 20 : 0 })),
   { id: 'hotel', name: 'OYO Hotel', x: 31, z: -9.9, cost: 1 },
 ];
 export const interiorFurniture = [

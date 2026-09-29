@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Add host IP for development server
+  experimental: {
+    allowedDevOrigins: ['172.16.0.52'],
+  } as any,
   async headers() {
     return [
       {

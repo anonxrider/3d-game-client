@@ -51,6 +51,20 @@ export function createWorldSocket(world: WorldServer, saveAwards: () => Promise<
           sendSnapshot(ws);
           return;
         }
+        if (data.type === 'rtc') {
+          const room = world.rooms.get(session.room);
+          if (!room || typeof data.target !== 'string') return;
+          const targetEntry = [...room.players.entries()].find(([token, member]) => member.person.id === data.target);
+          if (targetEntry) {
+            const targetWs = [...sessions.entries()].find(([ws, s]) => s.room === session.room && s.token === targetEntry[0]);
+            const sourceMember = room.players.get(session.token);
+            if (targetWs && sourceMember) {
+              targetWs[0].send(JSON.stringify({ type: 'rtc', source: sourceMember.person.id, payload: data.payload }));
+            }
+          }
+          return;
+        }
+
         if (data.type !== 'input' || !Number.isSafeInteger(data.sequence) || data.sequence < 0
           || typeof data.interact !== 'boolean' || !validInput(data.input)) throw new Error('Invalid controls');
         if (!world.update(session.room, session.token, data.input, data.interact, now, data.sequence)) {
