@@ -22,8 +22,10 @@ export default function HumanCharacter({ seated = false, riding = false, color =
   const skin = skins[appearance?.skin ?? 0] ?? skins[0];
   const senior = appearance?.age === 'senior';
   const child = appearance?.age === 'child';
+  const isWoman = appearance?.gender === 'woman';
   const hair = hairs[senior ? 4 : appearance?.hair ?? 0] ?? hairs[0];
   const shirt = useMemo(() => new MeshStandardMaterial({ color, roughness: 0.9 }), [color]);
+  const legMaterial = isWoman ? skin : trousers;
   useEffect(() => () => shirt.dispose(), [shirt]);
   const root = useRef<Group>(null);
   const torso = useRef<Group>(null);
@@ -66,10 +68,10 @@ export default function HumanCharacter({ seated = false, riding = false, color =
 
   return <group ref={root} scale={pedestrianScale(appearance)}>
     <group position={[0, seated ? 0.6 : 0.87, 0]}>
-      <Shape position={[0, 0.015, 0]} scale={[0.2, 0.14, 0.13]} material={trousers} />
+      <Shape position={[0, 0.015, 0]} scale={isWoman ? [0.28, 0.2, 0.22] : [0.2, 0.14, 0.13]} material={isWoman ? shirt : trousers} />
       <group ref={torso} rotation={[riding ? 0.18 : 0, 0, 0]}>
         <Shape position={[0, 0.29, 0]} scale={[0.25, 0.32, 0.145]} material={shirt} />
-        {child && <Shape position={[0, 0.28, -0.2]} scale={[0.21, 0.24, 0.11]} material={trousers} />}
+        {child && !isWoman && <Shape position={[0, 0.28, -0.2]} scale={[0.21, 0.24, 0.11]} material={trousers} />}
         <Shape position={[0, 0.565, 0]} scale={[0.068, 0.1, 0.07]} material={skin} />
         <group position={[0, 0.76, 0]} scale={child ? 1.12 : 1}>
           {appearance?.longHair && <Shape position={[0, -0.06, -0.09]} scale={[0.155, 0.25, 0.105]} material={hair} />}
@@ -98,9 +100,9 @@ export default function HumanCharacter({ seated = false, riding = false, color =
       </group>
       {([-1, 1] as const).map(side => <group key={side} ref={side === -1 ? leftLeg : rightLeg}
         position={[side * 0.108, -0.035, 0]} rotation={[seated ? -1.4 : 0, 0, 0]}>
-        <Shape position={[0, -0.17, 0]} scale={[0.096, 0.215, 0.105]} material={trousers} />
+        <Shape position={[0, -0.17, 0]} scale={[0.096, 0.215, 0.105]} material={legMaterial} />
         <group ref={side === -1 ? leftKnee : rightKnee} position={[0, -0.36, 0]} rotation={[seated ? 1.45 : 0.06, 0, 0]}>
-          <Shape position={[0, -0.16, 0]} scale={[0.073, 0.195, 0.08]} material={trousers} />
+          <Shape position={[0, -0.16, 0]} scale={[0.073, 0.195, 0.08]} material={legMaterial} />
           <Shape position={[0, -0.36, 0.05]} scale={[0.082, 0.063, 0.145]} material={shoes} />
         </group>
       </group>)}

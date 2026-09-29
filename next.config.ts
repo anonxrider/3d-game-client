@@ -1,10 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Add host IP for development server
-  experimental: {
-    allowedDevOrigins: ['*'],
-  } as any,
+  // Comma-separated hostnames for LAN or tunnel development access.
+  allowedDevOrigins: process.env.ALLOWED_DEV_ORIGINS?.split(',').map(host => host.trim()).filter(Boolean),
   async headers() {
     return [
       {

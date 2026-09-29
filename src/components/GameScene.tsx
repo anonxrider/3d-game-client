@@ -135,6 +135,10 @@ export default function GameScene() {
   const [interior, setInterior] = useState<string | null>(null);
   const [status, setStatus] = useState("Walk up to a car or bike · E to ride");
   const [hasInteractTarget, setHasInteractTarget] = useState(false);
+  const handleStatus = useCallback((text: string, hasTarget?: boolean) => {
+    setStatus(text);
+    setHasInteractTarget(!!hasTarget);
+  }, []);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [connection, setConnection] = useState('');
@@ -217,9 +221,9 @@ export default function GameScene() {
           <strong>{session.room}</strong> · 🌟 {snapshot?.players.find(p => p.id === snapshot.self)?.score || 0}
           <span className="status-details"> · {count}/12 players · {connection} · {dayCycle.label} {dayCycle.period} · {dayCycle.nextPeriod} in {dayCycle.countdown} · {getWeather(snapshot?.serverTime ?? 0).label}</span>
         </span>
-        <button className="mobile-menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
+        <button type="button" className="mobile-menu-toggle" aria-label={menuOpen ? "Close game menu" : "Open game menu"} aria-expanded={menuOpen} aria-controls="game-menu" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
       </div>
-      <div className="multiplayer-bar-controls">
+      <div id="game-menu" className="multiplayer-bar-controls">
         <label className="travel-menu">Travel to
           <select aria-label="Travel destination" value="" onChange={event => {
             if (!event.target.value) return;
@@ -236,6 +240,7 @@ export default function GameScene() {
         {interior === null && <button aria-pressed={observingAirport} onClick={() => { setFocusedTrain(null); setFocusedAirport(!observingAirport); setMenuOpen(false); }}>{observingAirport ? 'Back to player' : 'View airport'}</button>}
         <button onClick={async () => { try { await navigator.clipboard.writeText(window.location.href); setCopied(true); } catch { setConnection('Copy the room URL from your address bar'); } }}>{copied ? 'Link copied' : 'Copy invite'}</button>
         <button onClick={() => { void fetch('/api/world', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: JSON.stringify({ action: 'leave', room: session.room, token: session.token }) }).catch(() => {}); setSession(null); setInterior(null); setCopied(false); setFocusedTrain(null); setFocusedAirport(false); }}>Leave</button>
+        {snapshot && <WebRTCVoice snapshot={snapshot} />}
       </div>
     </div>
     {(hasInteractTarget || observingAirport || observingRailway) && (
@@ -259,7 +264,7 @@ export default function GameScene() {
       );
     })()}
 
-    {snapshot && <WebRTCVoice snapshot={snapshot} />}
+
 
     <Canvas
       shadows={false}
@@ -294,7 +299,7 @@ export default function GameScene() {
       </> : <Interior id={interior} />}
 
       {/* The Player */}
-      <Player session={session} observingRailway={observingScene} onSnapshot={setSnapshot} onStatus={(text, hasTarget) => { setStatus(text); setHasInteractTarget(!!hasTarget); }} onConnection={setConnection} onCount={setCount} onInterior={setInterior} />
+      <Player session={session} observingRailway={observingScene} onSnapshot={setSnapshot} onStatus={handleStatus} onConnection={setConnection} onCount={setCount} onInterior={setInterior} />
     </Canvas>
     </>
   );

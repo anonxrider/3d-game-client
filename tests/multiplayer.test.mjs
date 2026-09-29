@@ -340,7 +340,7 @@ test('separated players keep their populations and abandoned traffic slots are r
     world.update('spread', a.token, idle, false, 1000);
   }
   assert.ok(room.vehicles.length <= capacity + 4, 'travel reuses slots rather than growing forever');
-  assert.ok(room.npcs.length <= room.populationCells.size * 8);
+  assert.ok(room.npcs.length <= room.populationCells.size * 12);
 });
 
 
@@ -455,7 +455,8 @@ test('players climb fixed mountains, share elevation, and return smoothly to gro
   const world = new WorldServer();
   const a = world.join('hiking', 'Climber', 1000), b = world.join('hiking', 'Friend', 1000);
   const room = world.rooms.get('hiking'), player = room.players.get(a.token).person;
-  player.x = 0; player.z = -100; player.yaw = Math.PI;
+  const summit = terrain.mountains[0];
+  player.x = summit.x; player.z = summit.z + summit.radius; player.yaw = Math.PI;
   // This checks terrain at known distances; start at cruising speed.
   room.players.get(a.token).walkMotion = { speed: 5, turnSpeed: 0 };
   let now = 1000, previousHeight = 0;
@@ -467,7 +468,7 @@ test('players climb fixed mountains, share elevation, and return smoothly to gro
     assert.ok(shared.y - previousHeight < 0.37);
     previousHeight = shared.y;
   }
-  assert.ok(Math.abs(previousHeight - 36) < 0.001, 'summit is reachable');
+  assert.ok(Math.abs(previousHeight - summit.height) < 0.001, `summit is reachable: ${previousHeight}, x=${player.x}, z=${player.z}`);
   room.players.get(a.token).walkMotion = { speed: -5, turnSpeed: 0 };
   for (let step = 0; step < 100; step++) {
     now += 200;

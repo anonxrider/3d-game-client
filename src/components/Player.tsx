@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { Group, MathUtils, Vector3 } from 'three';
+import { touchMotion } from '@/lib/touch-input';
 import { MotionBuffer } from '@/lib/motion-buffer';
 import { railwayStations } from "@/lib/railway";
 import { getTerrainHeight } from "@/lib/terrain";
@@ -94,7 +95,7 @@ function Actor({ person, self, serverTime, observingRailway = false }: { person:
     const travelled = changedLocation || changedMode ? 0 : Math.hypot(group.position.x - previousX, group.position.z - previousZ);
     const walkingSpeed = delta > 0 ? travelled / delta : 0;
     const moving = walkingSpeed > 0.1 && person.vehicle === null && person.seat === null;
-    group.position.y = (person.station ? (person.y ?? 13.05) : person.interior === null ? getTerrainHeight(group.position.x, group.position.z) : 0) - 0.5;
+    group.position.y = (person.y !== undefined ? person.y : person.interior === null ? getTerrainHeight(group.position.x, group.position.z) : 0) - 0.5;
     if (bodyRef.current) {
       // Tie the gait to distance travelled and use a rounded wave so each
       // footfall eases through its low point instead of snapping upward.
@@ -198,8 +199,10 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
       const destination = travelDestinationRef.current;
       if (destination) { resetControls(); clickTargetRef.current = null; }
       const interact = !observingRef.current && interactRef.current;
-      const forward = observingRef.current || destination ? 0 : MathUtils.clamp(Number(held('KeyW', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown')) + Math.round(movement.current.forward * 100) / 100, -1, 1);
-      const turn = observingRef.current || destination ? 0 : MathUtils.clamp(Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'ArrowLeft')) + Math.round(movement.current.turn * 100) / 100, -1, 1);
+      const touch = touchMotion(movement.current, Number(touchKeys.current.has('KeyW')) - Number(touchKeys.current.has('KeyS')), riding);
+      const keyboard = (...codes: string[]) => codes.some(code => keys.current.has(code));
+      const forward = observingRef.current || destination ? 0 : MathUtils.clamp(Number(keyboard('KeyW', 'ArrowUp')) - Number(keyboard('KeyS', 'ArrowDown')) + Math.round(touch.forward * 100) / 100, -1, 1);
+      const turn = observingRef.current || destination ? 0 : MathUtils.clamp(Number(keyboard('KeyD', 'ArrowRight')) - Number(keyboard('KeyA', 'ArrowLeft')) + Math.round(touch.turn * 100) / 100, -1, 1);
       if (forward !== 0 || turn !== 0) clickTargetRef.current = null;
       const input = {
         destination: destination ?? undefined, forward, turn,

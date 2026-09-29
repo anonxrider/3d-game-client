@@ -11,8 +11,8 @@ export function pedestrianProfile(gx: number, gz: number, slot: number) {
   const age: Appearance['age'] = slot === 2 ? 'child' : slot === 3 ? 'senior' : 'adult';
   const gender: Appearance['gender'] = slot === 0 || (slot > 1 && seed % 2 === 0) ? 'woman' : 'man';
   const names = gender === 'woman'
-    ? age === 'child' ? ['Maya', 'Lily', 'Tara', 'Zoe'] : ['Priya', 'Aisha', 'Meera', 'Sofia']
-    : age === 'child' ? ['Leo', 'Arjun', 'Noah', 'Sam'] : ['Ravi', 'Omar', 'James', 'Daniel'];
+    ? age === 'child' ? ['Maya', 'Lily', 'Tara', 'Zoe', 'Ava', 'Mia', 'Diya', 'Sana', 'Chloe', 'Emma', 'Aria'] : ['Priya', 'Aisha', 'Meera', 'Sofia', 'Anita', 'Kavya', 'Riya', 'Zara', 'Elena', 'Nina', 'Olivia', 'Sarah']
+    : age === 'child' ? ['Leo', 'Arjun', 'Noah', 'Sam', 'Aryan', 'Rohan', 'Max', 'Liam', 'Jay', 'Eli'] : ['Ravi', 'Omar', 'James', 'Daniel', 'Amit', 'Vikram', 'David', 'Rahul', 'John', 'Carlos', 'Aditya'];
   return {
     name: names[(seed + slot) % names.length],
     appearance: { age, gender, skin: (seed + slot) % 4, hair: (seed + slot * 3) % 4, longHair: gender === 'woman' && (seed + slot) % 3 !== 1 } satisfies Appearance,

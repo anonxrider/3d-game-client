@@ -26,7 +26,7 @@ const TRAFFIC_SPEED = 4;
 // Keep a 3×3 neighborhood active around each player; overlapping areas share entities.
 const POPULATION_CELL_SIZE = 200;
 const COINS_PER_CELL = 25;
-const NPC_NAMES = ['Asha', 'Ravi', 'Maya', 'Arjun', 'Neha', 'Kabir', 'Isha', 'Dev'];
+const NPC_NAMES = ['Asha', 'Ravi', 'Maya', 'Arjun', 'Neha', 'Kabir', 'Isha', 'Dev', 'Mira', 'Rohan', 'Anaya', 'Kiran', 'Leo', 'Mia', 'Aryan', 'Zoe'];
 export class WorldServer {
   rooms = new Map<string, Room>();
   pendingAwards = new Map<string, { id: string; user_id: number; value: number }>();

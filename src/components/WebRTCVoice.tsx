@@ -6,6 +6,7 @@ import type { Snapshot } from '@/lib/multiplayer';
 export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [audioError, setAudioError] = useState('');
   const [incomingOffers, setIncomingOffers] = useState<Map<string, RTCSessionDescriptionInit>>(new Map());
   const [activeCalls, setActiveCalls] = useState<Set<string>>(new Set());
   
@@ -52,25 +53,46 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
   useEffect(() => {
     if (!audioEnabled) return;
 
-    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-      .then(s => setStream(s))
-      .catch(err => console.warn('Microphone access denied or error:', err));
+    let cancelled = false;
+    let acquiredStream: MediaStream | null = null;
+    const peers = peersRef.current;
+    const audioElements = audioElementsRef.current;
+    const candidates = pendingCandidatesRef.current;
+    const requestMicrophone = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('Voice chat requires HTTPS and microphone support.');
+        const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        if (cancelled) { media.getTracks().forEach(track => track.stop()); return; }
+        acquiredStream = media;
+        streamRef.current = media;
+        setStream(media);
+      } catch (error) {
+        if (cancelled) return;
+        setAudioError(error instanceof Error ? error.message : 'Unable to access microphone.');
+        setAudioEnabled(false);
+      }
+    };
+    void requestMicrophone();
 
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-      }
-      peersRef.current.forEach(pc => pc.close());
-      peersRef.current.clear();
-      audioElementsRef.current.forEach(a => {
-        a.pause();
-        a.srcObject = null;
-      });
-      audioElementsRef.current.clear();
-      setActiveCalls(new Set());
-      setIncomingOffers(new Map());
+      cancelled = true;
+      acquiredStream?.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+      peers.forEach(pc => pc.close());
+      peers.clear();
+      audioElements.forEach(audio => { audio.pause(); audio.srcObject = null; });
+      audioElements.clear();
+      candidates.clear();
     };
   }, [audioEnabled]);
+
+  const toggleAudio = () => {
+    setAudioError('');
+    setStream(null);
+    setActiveCalls(new Set());
+    setIncomingOffers(new Map());
+    setAudioEnabled(enabled => !enabled);
+  };
 
   const createPeer = useCallback((id: string) => {
     const pc = new RTCPeerConnection({
@@ -113,6 +135,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
     const handleRtcMessage = async (e: Event) => {
       const data = (e as CustomEvent).detail;
       const { source, payload } = data;
+      try {
       if (source === snapshot.self) return;
 
       if (payload.offer) {
@@ -126,6 +149,9 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
         const pc = peersRef.current.get(source);
         if (pc) {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
+          const pending = pendingCandidatesRef.current.get(source) || [];
+          for (const candidate of pending) await pc.addIceCandidate(candidate);
+          pendingCandidatesRef.current.delete(source);
         }
       } else if (payload.candidate) {
         const pc = peersRef.current.get(source);
@@ -142,6 +168,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
           pendingCandidatesRef.current.set(source, arr);
         }
       }
+      } catch { setAudioError('Voice connection failed. Disable voice and try again.'); }
     };
 
     window.addEventListener('rtc-receive', handleRtcMessage);
@@ -151,7 +178,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
   }, [audioEnabled, snapshot.self]);
 
   const callPlayer = async (id: string) => {
-    if (activeCalls.has(id)) return;
+    if (!streamRef.current || peersRef.current.has(id)) return;
     const pc = createPeer(id);
     peersRef.current.set(id, pc);
     setActiveCalls(prev => new Set(prev).add(id));
@@ -169,7 +196,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
 
   const acceptCall = async (id: string) => {
     const offer = incomingOffers.get(id);
-    if (!offer) return;
+    if (!offer || !streamRef.current) return;
 
     setIncomingOffers(prev => {
       const next = new Map(prev);
@@ -216,7 +243,8 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
     return (
       <div className="voice-chat-overlay">
         <span>Voice Chat Offline</span>
-        <button onClick={() => setAudioEnabled(true)}
+        {audioError && <span role="alert">{audioError}</span>}
+        <button onClick={toggleAudio}
           style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>
           Enable
         </button>
@@ -230,6 +258,8 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
         Voice Active (Local: {stream ? 'Mic On' : 'Connecting...'})
       </div>
 
+      <button type="button" onClick={toggleAudio}>Disable voice</button>
+      {audioError && <span role="alert">{audioError}</span>}
       {incomingOffers.size > 0 && (
         <div style={{ background: 'rgba(255, 165, 0, 0.2)', padding: '10px', borderRadius: '4px' }}>
           <div style={{ fontSize: '12px', marginBottom: '5px', color: '#FFD700' }}>Incoming Calls:</div>
@@ -239,7 +269,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
               <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                 <span>{p ? p.name : id}</span>
                 <div style={{ display: 'flex', gap: '5px' }}>
-                  <button onClick={() => acceptCall(id)} style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Accept</button>
+                  <button disabled={!stream} onClick={() => { void acceptCall(id).catch(() => setAudioError('Unable to accept call. Disable voice and try again.')); }} style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Accept</button>
                   <button onClick={() => declineCall(id)} style={{ background: '#f44336', border: 'none', color: 'white', padding: '2px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Decline</button>
                 </div>
               </div>
@@ -258,7 +288,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', marginBottom: '5px' }}>
               <span>{p.name}</span>
               {!isActive && !hasIncoming && (
-                <button onClick={() => callPlayer(p.id)} style={{ background: '#2196F3', border: 'none', color: 'white', padding: '2px 8px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Call</button>
+                <button disabled={!stream} onClick={() => callPlayer(p.id)} style={{ background: '#2196F3', border: 'none', color: 'white', padding: '2px 8px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px' }}>Call</button>
               )}
               {isActive && <span style={{ color: '#4CAF50', fontSize: '12px' }}>In Call</span>}
             </div>

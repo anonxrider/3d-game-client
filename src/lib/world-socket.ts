@@ -54,9 +54,9 @@ export function createWorldSocket(world: WorldServer, saveAwards: () => Promise<
         if (data.type === 'rtc') {
           const room = world.rooms.get(session.room);
           if (!room || typeof data.target !== 'string') return;
-          const targetEntry = [...room.players.entries()].find(([token, member]) => member.person.id === data.target);
+          const targetEntry = [...room.players.entries()].find(([, member]) => member.person.id === data.target);
           if (targetEntry) {
-            const targetWs = [...sessions.entries()].find(([ws, s]) => s.room === session.room && s.token === targetEntry[0]);
+            const targetWs = [...sessions.entries()].find(([, s]) => s.room === session.room && s.token === targetEntry[0]);
             const sourceMember = room.players.get(session.token);
             if (targetWs && sourceMember) {
               targetWs[0].send(JSON.stringify({ type: 'rtc', source: sourceMember.person.id, payload: data.payload }));
@@ -70,7 +70,8 @@ export function createWorldSocket(world: WorldServer, saveAwards: () => Promise<
         if (!world.update(session.room, session.token, data.input, data.interact, now, data.sequence)) {
           ws.close(4001, 'Session expired'); return;
         }
-        sendSnapshot(ws);
+        // The 20 Hz broadcast acknowledges input without a second full snapshot
+        // for every joystick change (up to 40 extra renders per second).
       } catch { ws.close(1008, 'Invalid message'); }
     });
     ws.on('close', () => {

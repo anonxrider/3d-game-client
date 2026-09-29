@@ -165,3 +165,69 @@ html, body, .game-container { height: 100dvh; }
     max-width: calc(100vw - 2rem);
   }
 }
+
+/* Keep the HUD within the usable viewport, including notched devices. */
+:root {
+  --hud-top: max(16px, env(safe-area-inset-top));
+  --hud-right: max(16px, env(safe-area-inset-right));
+  --hud-bottom: max(16px, env(safe-area-inset-bottom));
+  --hud-left: max(16px, env(safe-area-inset-left));
+}
+html, body, .game-container { width: 100%; }
+.ui-overlay { padding: var(--hud-top) var(--hud-right) var(--hud-bottom) var(--hud-left); }
+.multiplayer-lobby {
+  display: flex;
+  padding: var(--hud-top) var(--hud-right) var(--hud-bottom) var(--hud-left);
+  overscroll-behavior: contain;
+}
+.lobby-card { flex: 0 0 auto; margin: auto; min-width: 0; overflow-wrap: anywhere; }
+.lobby-card h2 { font-size: clamp(1.75rem, 7vw, 2.5rem); }
+.lobby-card input { min-width: 0; font-size: 16px; }
+button, input, select { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
+.world-loading { display: grid; place-items: center; width: 100%; height: 100%; padding: 24px; background: #0f172a; font-size: clamp(1.25rem, 5vw, 2rem); }
+.multiplayer-bar { top: var(--hud-top); right: var(--hud-right); width: min(600px, calc(100% - 190px - var(--hud-right))); max-height: calc(100dvh - var(--hud-top) - var(--hud-bottom)); overflow-y: auto; overscroll-behavior: contain; }
+.status-text { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.multiplayer-bar button, .travel-menu select { min-height: 44px; }
+.multiplayer-bar-controls { min-width: 0; }
+.travel-menu, .travel-menu select { min-width: 0; }
+.voice-chat-overlay, .voice-chat-overlay.voice-chat-active { position: static; min-width: 0; width: 100%; max-width: 100%; padding: 10px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.voice-chat-overlay.voice-chat-active { align-items: stretch; }
+.voice-chat-overlay button { width: auto; }
+.interaction-prompt { top: auto; bottom: calc(var(--hud-bottom) + 90px); left: 50%; max-width: calc(100% - 480px); width: max-content; overflow-wrap: anywhere; }
+.controls-hint { max-width: calc(100% - 440px); line-height: 1.9; }
+.mini-map { left: var(--hud-left); bottom: var(--hud-bottom); }
+.speedometer { right: var(--hud-right); bottom: var(--hud-bottom); }
+
+@media (max-width: 1000px), (max-height: 600px) {
+  .controls-hint { display: none; }
+  .multiplayer-bar { width: auto; max-width: calc(100% - 140px - var(--hud-right)); padding: 0; background: transparent; align-items: flex-end; }
+  .multiplayer-bar-header { width: auto; padding: 4px 8px; background: #0f172ae8; border-radius: 12px; }
+  .status-details { display: none; }
+  .mobile-menu-toggle { display: block; flex: 0 0 44px; width: 44px !important; color: #67e8f9 !important; background: transparent !important; font-size: 1.4rem; }
+  .multiplayer-bar-controls { display: none; }
+  .multiplayer-bar.menu-open { left: auto; width: min(380px, calc(100% - var(--hud-left) - var(--hud-right))); max-width: none; padding: 12px; background: #0f172af5; align-items: stretch; }
+  .multiplayer-bar.menu-open .multiplayer-bar-header { width: 100%; background: transparent; justify-content: space-between; }
+  .multiplayer-bar.menu-open .status-details { display: inline; }
+  .multiplayer-bar.menu-open .multiplayer-bar-controls { display: flex; flex-direction: column; align-items: stretch; }
+  .travel-menu { flex-direction: column; align-items: stretch; }
+  .travel-menu select { max-width: 100%; width: 100%; flex: auto; }
+  .interaction-prompt { max-width: calc(100% - 32px); bottom: calc(var(--hud-bottom) + 170px); }
+}
+@media (any-pointer: coarse) {
+  .mini-map { bottom: calc(220px + var(--hud-bottom)); }
+  .interaction-prompt { top: auto; bottom: calc(220px + var(--hud-bottom)); left: auto; right: var(--hud-right); transform: none; max-width: calc(100% - 150px - var(--hud-right)); }
+  .speedometer { bottom: calc(180px + var(--hud-bottom)); }
+}
+@media (max-width: 360px) and (any-pointer: coarse) {
+  .touch-controls { padding-left: 12px; padding-right: 12px; }
+  .touch-stick { width: 104px; }
+  .touch-actions { grid-template-columns: 50px 62px; gap: 8px; }
+  .touch-action { width: 50px; height: 50px; }
+  .touch-action-KeyE { width: 62px; height: 62px; }
+  .touch-pedals .touch-action { width: 52px; height: 54px; }
+}
+@media (max-height: 500px) and (any-pointer: coarse) {
+  .interaction-prompt { top: calc(var(--hud-top) + 60px); bottom: auto; left: 50%; right: auto; transform: translateX(-50%); max-width: 42%; }
+  .speedometer { bottom: calc(125px + var(--hud-bottom)); }
+}

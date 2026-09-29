@@ -15,6 +15,7 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: (user: Auth
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError('');
 
@@ -24,6 +25,7 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: (user: Auth
     try {
       const res = await fetch(`https://gameapi.jinskadamthodu.com${endpoint}`, {
         method: 'POST',
+        signal: AbortSignal.timeout(15000),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -50,7 +52,7 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: (user: Auth
   };
 
   return (
-    <div className="multiplayer-lobby" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="multiplayer-lobby">
       <form className="lobby-card" onSubmit={handleSubmit}>
         <span className="lobby-eyebrow">ETHERA ACCOUNT</span>
         <h2>{isLogin ? 'Welcome Back' : 'Create an Account'}</h2>
@@ -58,16 +60,16 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: (user: Auth
         {!isLogin && (
           <label>
             Name
-            <input type="text" value={name} onChange={e => setName(e.target.value)} required />
+            <input type="text" name="name" autoComplete="name" maxLength={255} value={name} onChange={e => setName(e.target.value)} required />
           </label>
         )}
         <label>
           Email
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="email" name="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required />
         </label>
         <label>
           Password
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <input type="password" name="password" autoComplete={isLogin ? "current-password" : "new-password"} minLength={isLogin ? undefined : 8} value={password} onChange={e => setPassword(e.target.value)} required />
         </label>
 
         <button disabled={loading}>{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Register')}</button>
@@ -76,7 +78,7 @@ export default function Auth({ onAuthenticated }: { onAuthenticated: (user: Auth
 
         <p style={{ marginTop: '1rem', textAlign: 'center', fontSize: '0.9rem' }}>
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button type="button" onClick={() => setIsLogin(!isLogin)} style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+          <button type="button" disabled={loading} onClick={() => { setIsLogin(!isLogin); setError(''); }} style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
             {isLogin ? 'Register' : 'Sign In'}
           </button>
         </p>
