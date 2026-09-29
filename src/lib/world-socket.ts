@@ -1,6 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import type { WorldServer } from './world-server';
 import type { Input } from './multiplayer';
+import { nearbySnapshot } from './nearby-snapshot';
 
 function validInput(input: Input) {
   return input && Number.isFinite(input.forward) && Math.abs(input.forward) <= 1 && Number.isFinite(input.turn) && Math.abs(input.turn) <= 1
@@ -20,7 +21,7 @@ export function createWorldSocket(world: WorldServer, saveAwards: () => Promise<
     const room = world.rooms.get(session.room);
     const member = room?.players.get(session.token);
     if (!room || !member) { ws.close(4001, 'Session expired'); return; }
-    ws.send(JSON.stringify({ type: 'snapshot', sequence: member.sequence, snapshot: world.snapshot(room, member.person.id) }));
+    ws.send(JSON.stringify({ type: 'snapshot', sequence: member.sequence, snapshot: nearbySnapshot(world.snapshot(room, member.person.id)) }));
   }
   wss.on('connection', ws => {
     const authTimeout = setTimeout(() => ws.close(4001, 'Authentication required'), 5000);

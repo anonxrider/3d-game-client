@@ -7,14 +7,15 @@ import ts from 'typescript';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ethera-tests-'));
-for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/police', 'lib/pedestrians', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/walk-motion', 'lib/world-runtime', 'lib/world-server', 'app/api/world/route']) {
+for (const file of ['components/world', 'lib/railway', 'lib/terrain', 'lib/airport', 'lib/destinations', 'lib/traffic', 'lib/police', 'lib/pedestrians', 'lib/birds', 'lib/day-night', 'lib/weather', 'lib/pathfinding', 'lib/walk-motion', 'lib/world-runtime', 'lib/world-server', 'lib/nearby-snapshot', 'app/api/world/route']) {
   const destination = path.join(temp, `${file}.js`);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
-  const source = fs.readFileSync(path.join(__dirname, '../src', `${file}.ts`), 'utf8').replace("'@/lib/world-runtime'", "'../../../lib/world-runtime'");
+  const source = fs.readFileSync(path.join(__dirname, '../src', `${file}.ts`), 'utf8').replaceAll("'@/lib/", "'../../../lib/");
   fs.writeFileSync(destination, ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText);
 }
 const { default: { WorldServer } } = await import(pathToFileURL(path.join(temp, 'lib/world-server.js')).href);
 const { default: { POST } } = await import(pathToFileURL(path.join(temp, 'app/api/world/route.js')).href);
+const { default: { nearbySnapshot, restoreSnapshot, SNAPSHOT_RADIUS } } = await import(pathToFileURL(path.join(temp, 'lib/nearby-snapshot.js')).href);
 after(() => fs.rmSync(temp, { recursive: true, force: true }));
 const idle = { forward: 0, turn: 0, brake: true };
 
@@ -91,9 +92,13 @@ test('route validates input and authenticates two independent client sessions', 
   const a = await (await send({ action: 'join', room: 'test', name: 'Alice', authToken: 'test-auth' })).json();
   const b = await (await send({ action: 'join', room: 'test', name: 'Bob', authToken: 'test-auth' })).json();
   assert.notEqual(a.token, b.token);
+  assert.ok(a.snapshot.vehicleEntries.length > 0);
+  assert.equal(a.snapshot.vehicles, undefined, 'join uses compact nearby transport');
   const updateResponse = await send({ action: 'update', room: 'test', token: b.token, input: idle, interact: false });
   assert.equal(updateResponse.headers.get('cache-control'), 'private, no-store');
   const snapshot = await updateResponse.json();
+  assert.ok(snapshot.vehicleEntries.length > 0);
+  assert.equal(snapshot.vehicles, undefined, 'HTTP updates use compact nearby transport');
   assert.equal(snapshot.players.length, 2);
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { ...idle, forward: 99 }, interact: false })).status, 400);
   assert.equal((await send({ action: 'update', room: 'test', token: a.token, input: { forward: 0.35, turn: -0.6, brake: false }, interact: false })).status, 200);
@@ -767,4 +772,62 @@ test('civilian population includes women, men, children and seniors without addi
   const second = world.join('people', 'Observer', 1100);
   const shared = world.update('people', second.token, idle, false, 1100);
   for (const person of civilians) assert.deepEqual(shared.npcs.find(p => p.id === person.id)?.appearance, person.appearance);
+});
+
+test('nearby transport filters entities, keeps stable vehicle slots, and follows travel', () => {
+  const world = new WorldServer();
+  const session = world.join('nearby', 'Alice', 1000);
+  const self = session.snapshot.players[0];
+  const car = { ...session.snapshot.vehicles[0], x: 0, z: 0 };
+  const snapshot = {
+    ...session.snapshot,
+    players: [{ ...self, x: 0, z: 0 }, { ...self, id: 'bob', x: 1000, z: 1000, vehicle: 3 }],
+    vehicles: [car, { ...car, x: 1000, z: 1000 }, { ...car, x: SNAPSHOT_RADIUS, z: SNAPSHOT_RADIUS }, { ...car, x: 1000, z: 1000 }],
+    npcs: [{ ...self, id: 'near', x: 0, z: 0 }, { ...self, id: 'far', x: 1000, z: 1000 }],
+    coins: [{ id: 'near', x: 0, z: 0, value: 1 }, { id: 'far', x: 1000, z: 1000, value: 1 }],
+  };
+  const wire = nearbySnapshot(snapshot);
+  assert.deepEqual(wire.vehicleEntries.map(([id]) => id), [0, 2, 3]);
+  assert.deepEqual(wire.npcs.map(p => p.id), ['near']);
+  assert.deepEqual(wire.coins.map(p => p.id), ['near']);
+  assert.equal(wire.players.length, 2, 'room roster stays complete');
+  const decoded = restoreSnapshot(JSON.parse(JSON.stringify(wire)));
+  assert.equal(1 in decoded.vehicles, false, 'excluded vehicles leave holes, not nulls');
+  assert.deepEqual(decoded.vehicles[2], snapshot.vehicles[2]);
+  assert.deepEqual(decoded.vehicles[decoded.players[1].vehicle], snapshot.vehicles[3]);
+  assert.deepEqual(decoded.vehicles.map((v, id) => ({ v, id })).filter(Boolean).map(v => v.id), [0, 2, 3]);
+  snapshot.players[0].x = 1000; snapshot.players[0].z = 1000;
+  const moved = restoreSnapshot(nearbySnapshot(snapshot));
+  assert.equal(0 in moved.vehicles, false, 'old region is removed after travel');
+  assert.deepEqual(moved.vehicles[1], snapshot.vehicles[1]);
+  assert.deepEqual(moved.coins.map(c => c.id), ['far']);
+  assert.deepEqual(moved.npcs.map(p => p.id), ['far']);
+  assert.equal(snapshot.vehicles.length, 4, 'filtering does not mutate simulation');
+});
+
+test('nearby transport centers on the ridden vehicle and preserves driver/passenger references', () => {
+  const world = new WorldServer();
+  const joined = world.join('riding', 'Driver', 1000);
+  const self = joined.snapshot.players[0];
+  const car = { ...joined.snapshot.vehicles[0], x: 1000, z: 1000, owner: self.id };
+  const snapshot = { ...joined.snapshot,
+    players: [{ ...self, vehicle: 2 }, { ...self, id: 'passenger', vehicle: 2 }],
+    vehicles: [{ ...car, x: 0, z: 0 }, { ...car, x: 1001 }, car],
+  };
+  const decoded = restoreSnapshot(nearbySnapshot(snapshot));
+  assert.equal(0 in decoded.vehicles, false);
+  assert.ok(decoded.vehicles[1]);
+  assert.equal(decoded.vehicles[decoded.players[0].vehicle].owner, self.id);
+  assert.equal(decoded.players[1].vehicle, decoded.players[0].vehicle);
+});
+
+test('nearby transport substantially reduces a fresh room payload', () => {
+  const world = new WorldServer();
+  const { snapshot } = world.join('bandwidth', 'Alice', 1000);
+  const nearby = nearbySnapshot(snapshot);
+  const before = Buffer.byteLength(JSON.stringify(snapshot));
+  const after = Buffer.byteLength(JSON.stringify(nearby));
+  assert.ok(after < before * 0.6, `${after} bytes should be below 60% of ${before}`);
+  assert.ok(nearby.vehicleEntries.length < snapshot.vehicles.length);
+  console.log(`Nearby snapshot: ${before} -> ${after} bytes; vehicles ${snapshot.vehicles.length} -> ${nearby.vehicleEntries.length}`);
 });

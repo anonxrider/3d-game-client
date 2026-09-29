@@ -12,6 +12,7 @@ import EnvironmentProps from "./Environment";
 import Auth from "./Auth";
 import { buildings, vehicleShopItems, getAreaName } from "./world";
 import type { Snapshot } from "@/lib/multiplayer";
+import { restoreSnapshot } from '@/lib/nearby-snapshot';
 import TouchControls from "./TouchControls";
 import { useMobileControls } from './useMobileControls';
 import AdaptiveResolution from "./AdaptiveResolution";
@@ -182,6 +183,7 @@ export default function GameScene() {
         const response = await fetch('/api/world', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10000), body: JSON.stringify({ action: 'join', room, name: user.name, authToken: token }) });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error);
+        result.snapshot = restoreSnapshot(result.snapshot);
         setSnapshot(result.snapshot); setSession({ room, ...result }); setCount(result.snapshot.players.length); setConnection('Connected');
         const url = new URL(window.location.href); url.searchParams.set('room', room); window.history.replaceState(null, '', url);
       } catch (error) { setError(error instanceof Error ? error.message : 'Unable to join'); }

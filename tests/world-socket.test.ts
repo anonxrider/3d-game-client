@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import { WebSocket } from 'ws';
 import { WorldServer } from '../src/lib/world-server';
 import { createWorldSocket } from '../src/lib/world-socket';
+import { restoreSnapshot } from '../src/lib/nearby-snapshot';
 
 test('socket auth, idle broadcasts, controls, reconnect, validation and disconnect stop', { timeout: 15000 }, async t => {
   const world = new WorldServer();
@@ -39,6 +40,11 @@ test('socket auth, idle broadcasts, controls, reconnect, validation and disconne
   assert.equal((await next(a)).snapshot.self, alice.snapshot.self);
   const b = await connect(bob.token);
   const initial = (await next(b)).snapshot;
+  assert.equal(initial.vehicles, undefined, 'socket sends compact vehicle entries');
+  assert.ok(initial.vehicleEntries.length < bob.snapshot.vehicles.length);
+  const restored = restoreSnapshot(initial);
+  assert.equal(restored.self, bob.snapshot.self);
+  for (const [index, vehicle] of initial.vehicleEntries) assert.deepEqual(restored.vehicles[index], vehicle);
   const later = (await next(b)).snapshot;
   assert.ok(later.serverTime > initial.serverTime, 'idle clients receive live world updates');
   a.send(JSON.stringify({ type: 'input', sequence: 1, interact: false, input: {forward: 1, turn: 0, brake: false} }));

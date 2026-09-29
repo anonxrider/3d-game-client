@@ -16,6 +16,7 @@ import Vehicle, { Rider } from './Vehicle';
 import { useKeyboardControls } from './useKeyboardControls';
 import { nearbyInteraction, buildings, vehicleShopItems } from './world';
 import type { Person, CarState, Snapshot } from '@/lib/multiplayer';
+import { restoreSnapshot } from '@/lib/nearby-snapshot';
 
 export type Session = { room: string; token: string; snapshot: Snapshot };
 
@@ -265,7 +266,7 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
           const data = JSON.parse(event.data);
           if (data.type !== 'snapshot') return;
           lastReceived = performance.now();
-          applySnapshot(data.snapshot, data.sequence);
+          applySnapshot(restoreSnapshot(data.snapshot), data.sequence);
           if (!ready) {
             ready = true; retryDelay = 500; previousControls = ''; sentTarget = null;
             sendControls();

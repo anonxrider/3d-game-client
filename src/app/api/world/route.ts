@@ -1,4 +1,5 @@
 import { world, saveAwardsBackground, laravelUrl } from '@/lib/world-runtime';
+import { nearbySnapshot } from '@/lib/nearby-snapshot';
 export const runtime = 'nodejs';
 
 // Apply this here too: the custom WebSocket server calls POST directly,
@@ -24,7 +25,8 @@ async function handleWorldRequest(request: Request) {
       if (response.status === 401) return Response.json({ error: 'Please sign in again' }, { status: 401 });
       if (!response.ok) throw new Error('Unable to load saved score');
       const account = await response.json();
-      return Response.json(world.join(data.room, account.name, Date.now(), account));
+      const joined = world.join(data.room, account.name, Date.now(), account);
+      return Response.json({ ...joined, snapshot: nearbySnapshot(joined.snapshot) });
     }
     catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'Unable to join' }, { status: 409 }); }
   }
@@ -45,5 +47,5 @@ async function handleWorldRequest(request: Request) {
 
   saveAwardsBackground().catch(console.error);
 
-  return snapshot ? Response.json(snapshot) : Response.json({ error: 'Session expired. Rejoin the room.' }, { status: 401 });
+  return snapshot ? Response.json(nearbySnapshot(snapshot)) : Response.json({ error: 'Session expired. Rejoin the room.' }, { status: 401 });
 }
