@@ -221,6 +221,17 @@ export const seats = [
   ...interiorFurniture.filter(f => f.kind === 'sofa' || f.kind === 'bed').map(f => ({ x: f.x, z: f.z, yaw: f.yaw, interior: 'generic' })),
   ...hotelFurniture.filter(f => f.kind === 'sofa' || f.kind === 'bed').map(f => ({ x: f.x, z: f.z, yaw: f.yaw, interior: 'hotel' }))
 ];
+export const trampolines = [
+  { x: -5, z: -10, color: '#f59e0b' },
+];
+for (let gx = -CITY_BLOCK_RADIUS; gx <= CITY_BLOCK_RADIUS; gx++) {
+  for (let gz = -CITY_BLOCK_RADIUS; gz <= CITY_BLOCK_RADIUS; gz++) {
+    if (Math.abs(gx + gz) % 4 === 0) {
+      trampolines.push({ x: gx * 40 + 8, z: gz * 40 - 8, color: colors[Math.abs(gx * gz) % colors.length] });
+    }
+  }
+}
+
 export function blockedInside(x: number, z: number, id: string | null = null) {
   if (id === 'hotel') {
     // Hotel bounds
@@ -231,13 +242,14 @@ export function blockedInside(x: number, z: number, id: string | null = null) {
   }
   return Math.abs(x) > 3.6 || Math.abs(z) > 2.6 || interiorFurniture.some(f => Math.abs(x - f.x) < f.width / 2 + 0.4 && Math.abs(z - f.z) < f.depth / 2 + 0.4);
 }
-type InteractionKind = 'vehicleShop' | 'building' | 'seat' | 'vehicle' | 'teleport';
+type InteractionKind = 'vehicleShop' | 'building' | 'seat' | 'vehicle' | 'teleport' | 'trampoline';
 type Interaction = { kind: InteractionKind; index: number; distance: number; range: number };
 const staticInteractions = [
   ...vehicleShopItems.map((p, index) => ({ ...p, index, kind: 'vehicleShop' as const, range: 2.2, interior: null as string | null })),
   ...buildings.map((p, index) => ({ ...p, index, kind: 'building' as const, range: 1.8, interior: null as string | null })),
   ...seats.map((p, index) => ({ ...p, index, kind: 'seat' as const, range: 1.8, interior: p.interior })),
   ...hotelTeleporters.map((p, index) => ({ ...p, index, kind: 'teleport' as const, range: 1.8, interior: 'hotel' })),
+  ...trampolines.map((p, index) => ({ ...p, index, kind: 'trampoline' as const, range: 2.2, interior: null as string | null })),
 ];
 const nearbyStaticInteractions = spatialIndex(staticInteractions, p => [p.x, p.z]);
 export function nearbyInteraction(x: number, z: number, vehicles: readonly { x: number; z: number }[], interiorId: string | null = null): Interaction | undefined {

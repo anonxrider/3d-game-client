@@ -133,3 +133,35 @@ html, body, .game-container { height: 100dvh; }
   .touch-pedals .touch-action, .touch-action { width: 50px; height: 50px; }
   .speedometer { bottom: calc(130px + env(safe-area-inset-bottom)); }
 }
+
+.voice-chat-overlay {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 14;
+  background: rgba(0,0,0,0.7);
+  padding: 10px 20px;
+  border-radius: 8px;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.voice-chat-overlay.voice-chat-active {
+  background: rgba(0,0,0,0.6);
+  padding: 15px;
+  min-width: 200px;
+  flex-direction: column;
+}
+
+@media (max-width: 700px) {
+  .voice-chat-overlay {
+    top: 4rem;
+    left: 1rem;
+    right: auto;
+    font-size: 0.8rem;
+    max-width: calc(100vw - 2rem);
+  }
+}

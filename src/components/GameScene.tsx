@@ -134,6 +134,7 @@ export default function GameScene() {
   const [token, setToken] = useState<string | null>(storedSession.token);
   const [interior, setInterior] = useState<string | null>(null);
   const [status, setStatus] = useState("Walk up to a car or bike · E to ride");
+  const [hasInteractTarget, setHasInteractTarget] = useState(false);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [connection, setConnection] = useState('');
@@ -237,12 +238,14 @@ export default function GameScene() {
         <button onClick={() => { void fetch('/api/world', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: JSON.stringify({ action: 'leave', room: session.room, token: session.token }) }).catch(() => {}); setSession(null); setInterior(null); setCopied(false); setFocusedTrain(null); setFocusedAirport(false); }}>Leave</button>
       </div>
     </div>
-    <div className="interaction-prompt" role="status">
-      <strong className="current-place">{selfPlayer?.station ? destinations.find(d => d.id === selfPlayer.station)?.name : interior ? buildings.find(b => b.id === interior)?.name : (inAirport(renderCenter.x, renderCenter.z) ? airport.name : mountains.find(m => Math.abs(renderCenter.x - m.x) + Math.abs(renderCenter.z - m.z) <= m.radius)?.name ?? getAreaName(renderCenter.x, renderCenter.z))}</strong>
-      {observingAirport ? 'Airport camera · Watch departures and landings · Back to player to explore' : observingRailway ? 'Train camera · Select Back to player to resume exploring' : status}
-    </div>
+    {(hasInteractTarget || observingAirport || observingRailway) && (
+      <div className="interaction-prompt" role="status">
+        <strong className="current-place">{selfPlayer?.station ? destinations.find(d => d.id === selfPlayer.station)?.name : interior ? buildings.find(b => b.id === interior)?.name : (inAirport(renderCenter.x, renderCenter.z) ? airport.name : mountains.find(m => Math.abs(renderCenter.x - m.x) + Math.abs(renderCenter.z - m.z) <= m.radius)?.name ?? getAreaName(renderCenter.x, renderCenter.z))}</strong>
+        {observingAirport ? 'Airport camera · Watch departures and landings · Back to player to explore' : observingRailway ? 'Train camera · Select Back to player to resume exploring' : status}
+      </div>
+    )}
     <MiniMap snapshot={snapshot} />
-    {!observingScene && <TouchControls driving={selfPlayer?.vehicle != null} />}
+    {!observingScene && <TouchControls driving={selfPlayer?.vehicle != null} hasInteractTarget={hasInteractTarget} />}
     
     {(() => {
       const self = snapshot?.players.find(p => p.id === snapshot.self);
@@ -291,7 +294,7 @@ export default function GameScene() {
       </> : <Interior id={interior} />}
 
       {/* The Player */}
-      <Player session={session} observingRailway={observingScene} onSnapshot={setSnapshot} onStatus={setStatus} onConnection={setConnection} onCount={setCount} onInterior={setInterior} />
+      <Player session={session} observingRailway={observingScene} onSnapshot={setSnapshot} onStatus={(text, hasTarget) => { setStatus(text); setHasInteractTarget(!!hasTarget); }} onConnection={setConnection} onCount={setCount} onInterior={setInterior} />
     </Canvas>
     </>
   );

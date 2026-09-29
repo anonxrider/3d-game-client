@@ -132,13 +132,13 @@ function Thumbstick() {
   ><span className="touch-stick-axis" aria-hidden="true" /><span className="touch-stick-thumb" aria-hidden="true" /></div><span className="touch-caption">MOVE / STEER</span></div>;
 }
 
-export default function TouchControls({ driving = false }: { driving?: boolean }) {
+export default function TouchControls({ driving = false, hasInteractTarget = true }: { driving?: boolean; hasInteractTarget?: boolean }) {
   return <div className="touch-controls" aria-label="Game controls">
     <Thumbstick />
     <div className="touch-actions">
       {driving && <div className="touch-pedals"><Control code="KeyW" label="Gas" icon="▲" /><Control code="KeyS" label="Reverse" icon="▼" /></div>}
       <Control code="KeyH" label="Horn" icon="♪" />
-      <Control code="KeyE" label="Interact" icon="↗" />
+      {hasInteractTarget && <Control code="KeyE" label="Interact" icon="↗" />}
       <Control code="Space" label="Brake" icon="Ⅱ" />
     </div>
   </div>;

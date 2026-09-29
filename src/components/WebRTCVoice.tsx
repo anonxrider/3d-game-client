@@ -214,11 +214,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
 
   if (!audioEnabled) {
     return (
-      <div style={{
-        position: 'absolute', top: '20px', right: '20px', zIndex: 1000,
-        background: 'rgba(0,0,0,0.7)', padding: '10px 20px', borderRadius: '8px',
-        color: 'white', display: 'flex', alignItems: 'center', gap: '10px', pointerEvents: 'auto'
-      }}>
+      <div className="voice-chat-overlay">
         <span>Voice Chat Offline</span>
         <button onClick={() => setAudioEnabled(true)}
           style={{ background: '#4CAF50', border: 'none', color: 'white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>
@@ -229,11 +225,7 @@ export default function WebRTCVoice({ snapshot }: { snapshot: Snapshot }) {
   }
 
   return (
-    <div style={{
-      position: 'absolute', top: '20px', right: '20px', zIndex: 1000,
-      background: 'rgba(0,0,0,0.6)', padding: '15px', borderRadius: '8px',
-      color: 'white', minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'auto'
-    }}>
+    <div className="voice-chat-overlay voice-chat-active">
       <div style={{ fontWeight: 'bold', color: '#4CAF50', borderBottom: '1px solid #444', paddingBottom: '5px' }}>
         Voice Active (Local: {stream ? 'Mic On' : 'Connecting...'})
       </div>

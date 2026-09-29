@@ -12,7 +12,7 @@ import type { Input, Person, CarState, Snapshot, Coin, VehicleKind } from './mul
 import { findPath } from './pathfinding';
 import { advanceWalk, type WalkMotion } from './walk-motion';
 
-type Member = { person: Person; input: Input; seen: number; sequence: number; walkMotion?: WalkMotion; userId?: number; pathTarget?: {x: number, z: number}; path?: {x: number, z: number}[] };
+type Member = { person: Person; input: Input; seen: number; sequence: number; walkMotion?: WalkMotion; userId?: number; pathTarget?: {x: number, z: number}; path?: {x: number, z: number}[]; velocityY?: number; y?: number };
 type Npc = { person: Person; target: { x: number; z: number }; wait: number; cell?: string };
 type Room = { airportPrepared?: boolean; players: Map<string, Member>; vehicles: CarState[]; coins: Coin[]; tick: number; emptySince?: number; npcs: Npc[]; populationCells?: Set<string>; trafficCells?: Map<string, number[]>; trafficPool?: number[]; trafficRoutes?: Map<number, TrafficRoute> };
 const colors = ['#38bdf8', '#fb7185', '#a3e635', '#c084fc', '#fbbf24', '#2dd4bf'];
@@ -84,11 +84,27 @@ export class WorldServer {
     return `${Math.floor(x / POPULATION_CELL_SIZE)}:${Math.floor(z / POPULATION_CELL_SIZE)}`;
   }
   npcTarget(npc: Npc) {
-    // Walk along a clear road verge instead of targeting the middle of houses.
+    const gx = Number(npc.cell?.split(':')[0] ?? 0);
     const gz = Number(npc.cell?.split(':')[1] ?? 0);
     const index = Number(npc.person.id.split('-').at(-1) ?? 0);
-    const start = gz * POPULATION_CELL_SIZE + (npc.person.duty ? 14 : 30 + Math.floor(index / 2) * 80);
-    return { x: npc.person.x, z: npc.target.z > start ? start : start + 24 };
+    let startX, startZ;
+    if (index >= 8) {
+      startX = gx * POPULATION_CELL_SIZE + 6 + ((index - 8) % 2) * 40;
+      startZ = gz * POPULATION_CELL_SIZE + 6 + Math.floor((index - 8) / 2) * 40;
+    } else {
+      startX = gx * POPULATION_CELL_SIZE + (index === 5 ? 44.8 : 46 + (index % 2) * 80 + (index >= 6 ? 40 : 0));
+      startZ = gz * POPULATION_CELL_SIZE + (npc.person.duty ? 14 : 30 + Math.floor(index / 2) * 80);
+    }
+    
+    if (npc.person.appearance?.age === 'child') {
+      // Children play by wandering randomly near their start point
+      return { 
+        x: startX + (Math.random() - 0.5) * 15, 
+        z: startZ + (Math.random() - 0.5) * 15 
+      };
+    }
+    
+    return { x: npc.person.x, z: npc.target.z > startZ ? startZ : startZ + 24 };
   }
   syncPopulation(room: Room) {
     const cells = this.populationCells(room);
@@ -116,14 +132,20 @@ export class WorldServer {
     for (const cell of cells) {
       const [gx, gz] = cell.split(':').map(Number);
       if (!room.npcs.some(npc => npc.cell === cell)) {
-        for (let i = 0; i < 8; i++) {
-          const x = gx * POPULATION_CELL_SIZE + (i === 5 ? 44.8 : 46 + (i % 2) * 80 + (i >= 6 ? 40 : 0));
-          const z = gz * POPULATION_CELL_SIZE + (i === 5 ? 44.8 : i >= 4 ? 14 : 30 + Math.floor(i / 2) * 80);
+        for (let i = 0; i < 12; i++) {
+          let x, z;
+          if (i >= 8) {
+            x = gx * POPULATION_CELL_SIZE + 6 + ((i - 8) % 2) * 40;
+            z = gz * POPULATION_CELL_SIZE + 6 + Math.floor((i - 8) / 2) * 40;
+          } else {
+            x = gx * POPULATION_CELL_SIZE + (i === 5 ? 44.8 : 46 + (i % 2) * 80 + (i >= 6 ? 40 : 0));
+            z = gz * POPULATION_CELL_SIZE + (i === 5 ? 44.8 : i >= 4 ? 14 : 30 + Math.floor(i / 2) * 80);
+          }
           if (inAirport(x, z) || this.blocked(room, x, z, 0.4)) continue;
           const person: Person = { id: `npc-${cell}-${i}`, name: NPC_NAMES[Math.abs(gx + gz + i) % NPC_NAMES.length], color: colors[Math.abs(gx - gz + i) % colors.length], x, z, yaw: 0, vehicle: null, seat: null, interior: null, message: '', score: 0, unlocked: [] };
-          if (i < 4) Object.assign(person, pedestrianProfile(gx, gz, i));
+          if (i < 4 || i >= 8) Object.assign(person, pedestrianProfile(gx, gz, i >= 8 ? 2 : i));
           if (i === 6 || i === 7) { person.duty = i === 6 ? 'paramedic' : 'firefighter'; person.name = i === 6 ? 'Paramedic' : 'Firefighter'; person.color = i === 6 ? '#0d9488' : '#b45309'; }
-          else if (i >= 4) { person.duty = i === 5 ? 'traffic' : 'patrol'; person.name = i === 5 ? 'Traffic Police' : 'Police Officer'; person.color = i === 5 ? '#e6f0cf' : '#172554'; }
+          else if (i >= 4 && i < 8) { person.duty = i === 5 ? 'traffic' : 'patrol'; person.name = i === 5 ? 'Traffic Police' : 'Police Officer'; person.color = i === 5 ? '#e6f0cf' : '#172554'; }
           room.npcs.push({ person, target: { x, z: z + 24 }, wait: i * 0.4, cell });
         }
       }
@@ -159,7 +181,7 @@ export class WorldServer {
       const dz = npc.target.z - p.z;
       const distance = Math.hypot(dx, dz);
       if (distance < 0.35) {
-        npc.wait = 0.8 + Math.random() * 2.2;
+        npc.wait = p.appearance?.age === 'child' ? Math.random() * 0.5 : 0.8 + Math.random() * 2.2;
         npc.target = this.npcTarget(npc);
         continue;
       }
@@ -172,7 +194,7 @@ export class WorldServer {
         p.z = nextZ;
       } else {
         npc.target = this.npcTarget(npc);
-        npc.wait = 0.4;
+        npc.wait = p.appearance?.age === 'child' ? 0.2 : 0.4;
       }
     }
   }
@@ -346,6 +368,15 @@ export class WorldServer {
                member.path = undefined;
             }
           }
+          if (member.velocityY !== undefined) {
+            member.y = (member.y ?? (p.interior === null ? getTerrainHeight(p.x, p.z) : 0)) + member.velocityY * dt;
+            member.velocityY -= 40 * dt; // gravity
+            const ground = p.interior === null ? getTerrainHeight(p.x, p.z) : 0;
+            if (member.y <= ground) {
+              member.y = ground;
+              member.velocityY = undefined;
+            }
+          }
         }
       }
       room.vehicles.forEach((vehicle, index) => {
@@ -408,7 +439,7 @@ export class WorldServer {
   }
   snapshot(room: Room, self: string): Snapshot {
     const member = [...room.players.values()].find(m => m.person.id === self);
-    return { targetPoint: member?.input.targetPoint ?? null, serverTime: room.tick, self, players: [...room.players.values()].map(m => ({ ...m.person, y: m.person.station ? RAIL_HEIGHT + 1.05 : m.person.interior === null ? getTerrainHeight(m.person.x, m.person.z) : 0 })), vehicles: room.vehicles.map(v => ({ ...v })), coins: room.coins.map(c => ({ ...c })), npcs: room.npcs.map(npc => ({ ...npc.person, y: getTerrainHeight(npc.person.x, npc.person.z) })) };
+    return { targetPoint: member?.input.targetPoint ?? null, serverTime: room.tick, self, players: [...room.players.values()].map(m => ({ ...m.person, y: m.velocityY !== undefined ? m.y : m.person.station ? RAIL_HEIGHT + 1.05 : m.person.interior === null ? getTerrainHeight(m.person.x, m.person.z) : 0 })), vehicles: room.vehicles.map(v => ({ ...v })), coins: room.coins.map(c => ({ ...c })), npcs: room.npcs.map(npc => ({ ...npc.person, y: getTerrainHeight(npc.person.x, npc.person.z) })) };
   }
   update(name: string, token: string, input: Input, interact: boolean, now = Date.now(), sequence?: number) {
     this.cleanup(now);
@@ -515,6 +546,10 @@ export class WorldServer {
             p.x = teleporter.destX;
             p.z = teleporter.destZ;
           });
+        } else if (target.kind === 'trampoline') {
+          member.velocityY = 25;
+          member.y = getTerrainHeight(p.x, p.z);
+          p.message = 'Wheee!';
         } else if (target.kind === 'seat') {
           if ([...room.players.values()].some(m => m.person.seat === target.index)) p.message = 'Someone is already sitting here';
           else { const seat = seats[target.index]; p.seat = target.index; p.x = seat.x; p.z = seat.z; p.yaw = seat.yaw; }

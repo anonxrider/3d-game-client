@@ -6,7 +6,7 @@ import { Group, InstancedMesh, Object3D } from "three";
 import { Html, Text } from "@react-three/drei";
 import StreetProps from "./StreetProps";
 import Vehicle from "./Vehicle";
-import { houses, streetProps, trees, vehicleShopItems } from "./world";
+import { houses, streetProps, trees, vehicleShopItems, trampolines } from "./world";
 import { getTerrainHeight, mountains } from "@/lib/terrain";
 import { getBirdBehavior, getNearbyFlocks, type BirdPerch } from "@/lib/birds";
 
@@ -325,6 +325,23 @@ function VehicleShop() {
   </group>;
 }
 
+function Trampolines({ positions }: { positions: {x: number, z: number, color: string}[] }) {
+  return <group>
+    {positions.map((t, i) => (
+      <group key={i} position={[t.x, getTerrainHeight(t.x, t.z) - 0.45, t.z]}>
+        <mesh receiveShadow castShadow position={[0, 0, 0]}>
+          <cylinderGeometry args={[1.5, 1.5, 0.2, 16]} />
+          <meshStandardMaterial color="#334155" />
+        </mesh>
+        <mesh receiveShadow position={[0, 0.11, 0]}>
+          <cylinderGeometry args={[1.3, 1.3, 0.05, 16]} />
+          <meshStandardMaterial color={t.color} roughness={0.6} />
+        </mesh>
+      </group>
+    ))}
+  </group>;
+}
+
 function Leaves({ center }: { center: { x: number; z: number } }) {
   const leavesMesh = useRef<InstancedMesh>(null);
   const positions = useMemo(() => {
@@ -386,6 +403,7 @@ function EnvironmentProps({ center = { x: 0, z: 0 }, onTravelClick, mobile = fal
   const visibleHouses = useMemo(() => houses.filter(h => inRange(h.x, h.z, center, radius)), [center, radius]);
   const visibleTrees = useMemo(() => trees.filter(([x, z]) => inRange(x, z, center, radius)), [center, radius]);
   const visibleStreetProps = useMemo(() => streetProps.filter(prop => inRange(prop.x, prop.z, center, radius)), [center, radius]);
+  const visibleTrampolines = useMemo(() => trampolines.filter(t => inRange(t.x, t.z, center, radius)), [center, radius]);
 
   const namedPlaces = useMemo(() => visibleHouses
     .filter(h => Math.hypot(h.x - center.x, h.z - center.z) < 55)
@@ -407,6 +425,7 @@ function EnvironmentProps({ center = { x: 0, z: 0 }, onTravelClick, mobile = fal
       return <House key={`${h.x}:${h.z}`} {...h} />;
     })}
     {visibleTrees.length > 0 && <Trees positions={visibleTrees} />}
+    {visibleTrampolines.length > 0 && <Trampolines positions={visibleTrampolines} />}
     {!mobile && <Leaves center={center} />}
   </group>;
 }

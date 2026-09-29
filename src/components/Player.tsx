@@ -162,7 +162,7 @@ const MemoizedSharedVehicle = React.memo(SharedVehicle);
 export const travelDestinationRef = { current: null as string | null };
 export const clickTargetRef = { current: null as { x: number, z: number } | null };
 
-export default function Player({ session, observingRailway = false, onSnapshot, onStatus, onConnection, onCount, onInterior }: { session: Session; observingRailway?: boolean; onSnapshot: (snapshot: Snapshot) => void; onStatus: (text: string) => void; onConnection: (text: string) => void; onCount: (count: number) => void; onInterior: (id: string | null) => void }) {
+export default function Player({ session, observingRailway = false, onSnapshot, onStatus, onConnection, onCount, onInterior }: { session: Session; observingRailway?: boolean; onSnapshot: (snapshot: Snapshot) => void; onStatus: (text: string, hasTarget?: boolean) => void; onConnection: (text: string) => void; onCount: (count: number) => void; onInterior: (id: string | null) => void }) {
   const [snapshot, setSnapshot] = useState(session.snapshot);
   const mobile = useMobileControls();
   const { keys, touchKeys, interactRef, movement, resetControls } = useKeyboardControls();
@@ -242,6 +242,7 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
         const hint = me.station ? 'Railway platform · Walk around · E to return to street' : me.seat !== null ? 'Sitting · Press E to stand up'
           : me.interior !== null ? 'Inside · WASD to walk · Approach EXIT and press E to leave'
           : me.vehicle !== null ? (isDriver ? 'WASD / arrows to drive · SPACE brake · H horn · E exit' : 'Passenger · Enjoy the ride · H horn · E exit')
+          : target?.kind === 'trampoline' ? 'Press E to launch!'
           : target?.kind === 'vehicleShop' ? `Press E to buy ${vehicleShopItems[target.index].name} (${vehicleShopItems[target.index].cost} coins)`
           : target?.kind === 'seat' ? 'Press E to sit down'
           : target?.kind === 'building' ? (!me.unlocked?.includes(buildings[target.index].id) && buildings[target.index].cost > 0 ? `Press E to unlock ${buildings[target.index].name} (${buildings[target.index].cost} coins)` : `Press E to enter ${buildings[target.index].name}`)
@@ -249,7 +250,9 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
           : railwayStations.some(s => Math.hypot(me.x - s.x, me.z - 10) < 2.2) ? 'Station lift · Press E to go up to the platform'
           : getTerrainHeight(me.x, me.z) > 0 ? `Mountain trail · ${Math.round(getTerrainHeight(me.x, me.z))} m · Keep walking to climb`
           : 'Explore together · E to sit, enter a building, or ride';
-        onStatus(Date.now() < noticeUntil ? notice : hint);
+        
+        const hasInteractTarget = me.station != null || me.seat !== null || me.interior !== null || me.vehicle !== null || target != null || railwayStations.some(s => Math.hypot(me.x - s.x, me.z - 10) < 2.2);
+        onStatus(Date.now() < noticeUntil ? notice : hint, hasInteractTarget);
     };
     const connect = () => {
       if (stopped) return;
