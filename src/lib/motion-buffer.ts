@@ -9,6 +9,8 @@ export class MotionBuffer {
   private latest = -Infinity;
   readonly pose: Pose = { x: 0, z: 0, yaw: 0 };
 
+  constructor(private readonly delay = 100) {}
+
   update(pose: Pose, time: number, now: number, reset = false): Pose {
     if (reset || this.samples.length === 0) {
       this.samples = [{ x: pose.x, z: pose.z, yaw: pose.yaw, time }];
@@ -23,7 +25,7 @@ export class MotionBuffer {
       // pull the playback clock backwards.
       this.offset = Math.min(this.offset, now - time);
     }
-    const renderTime = now - this.offset - 100;
+    const renderTime = now - this.offset - this.delay;
     while (this.samples.length > 2 && this.samples[1].time <= renderTime) this.samples.shift();
     const from = this.samples[0];
     const to = this.samples[1] ?? from;

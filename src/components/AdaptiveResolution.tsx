@@ -9,7 +9,7 @@ export default function AdaptiveResolution() {
   const setFrameloop = useThree(state => state.setFrameloop);
   const sample = useRef({ elapsed: 0, frames: 0, dpr: 1 });
   useEffect(() => {
-    const dpr = Math.min(window.devicePixelRatio || 1, matchMedia('(any-pointer: coarse)').matches ? 0.85 : 1.5);
+    const dpr = Math.min(window.devicePixelRatio || 1, matchMedia('(any-pointer: coarse)').matches ? 0.75 : 1.5);
     sample.current = { elapsed: 0, frames: 0, dpr };
     setDpr(dpr);
     const visibility = () => {
@@ -26,10 +26,10 @@ export default function AdaptiveResolution() {
     const stats = sample.current;
     stats.elapsed += delta;
     stats.frames++;
-    if (stats.elapsed < 3) return;
+    if (stats.elapsed < 2) return;
     const fps = stats.frames / stats.elapsed;
-    const ceiling = Math.min(window.devicePixelRatio || 1, matchMedia('(any-pointer: coarse)').matches ? 0.85 : 1.5);
-    const next = fps < 42 ? Math.max(0.65, stats.dpr - 0.15)
+    const ceiling = Math.min(window.devicePixelRatio || 1, matchMedia('(any-pointer: coarse)').matches ? 0.75 : 1.5);
+    const next = fps < 42 ? Math.max(0.5, stats.dpr - 0.1)
       : fps > 57 ? Math.min(ceiling, stats.dpr + 0.1) : stats.dpr;
     if (Math.abs(next - stats.dpr) > 0.01) { stats.dpr = next; setDpr(next); }
     stats.elapsed = 0;

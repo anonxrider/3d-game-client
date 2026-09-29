@@ -41,7 +41,7 @@ function loadStoredSession() {
   }
 }
 
-function RenderCoin({ coin }: { coin: import('@/lib/multiplayer').Coin }) {
+function RenderCoin({ coin, showLabel = true }: { coin: import('@/lib/multiplayer').Coin; showLabel?: boolean }) {
   const ref = useRef<Mesh>(null);
   useFrame((_, delta) => {
     if (ref.current) {
@@ -55,9 +55,9 @@ function RenderCoin({ coin }: { coin: import('@/lib/multiplayer').Coin }) {
       <cylinderGeometry args={[0.4, 0.4, 0.1, 16]} />
       <meshStandardMaterial color="#fbbf24" emissive="#d97706" emissiveIntensity={0.5} />
     </mesh>
-    <Html position={[0, 0.85, 0]} center style={{ pointerEvents: "none" }}>
+    {showLabel && <Html position={[0, 0.85, 0]} center style={{ pointerEvents: "none" }}>
       <span style={{ color: "#fde68a", background: "rgba(35, 24, 5, 0.85)", border: "1px solid #fbbf24", borderRadius: 12, padding: "2px 7px", fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" }}>+{coin.value}</span>
-    </Html>
+    </Html>}
     </group>
   );
 }
@@ -268,7 +268,7 @@ export default function GameScene() {
 
     <Canvas
       shadows={false}
-      dpr={[1, 1.5]}
+      dpr={mobile ? 0.75 : 1.5}
       gl={{ antialias: false, powerPreference: "high-performance" }}
       fallback={<div role="alert">This device cannot start the 3D renderer. Try a browser with WebGL enabled.</div>}
       camera={{ position: [0, 5, 10], fov: 50, near: 0.5, far: 600 }}
@@ -294,7 +294,7 @@ export default function GameScene() {
 
       {/* Floating Coins */}
       {visibleCoins.map(coin => (
-        <RenderCoin key={coin.id} coin={coin} />
+        <RenderCoin key={coin.id} coin={coin} showLabel={!mobile} />
       ))}
       </> : <Interior id={interior} />}
 

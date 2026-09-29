@@ -5,7 +5,7 @@ import VehicleAudio from './VehicleAudio';
 import { EmergencyVehicle, EmergencyWorker } from './EmergencyServices';
 import { PoliceOfficer, PoliceLights } from './Police';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { Group, MathUtils, Vector3 } from 'three';
@@ -46,8 +46,8 @@ function playHorn() {
   } catch {}
 }
 
-function Actor({ person, self, serverTime, observingRailway = false }: { person: Person; self: boolean; serverTime: number; observingRailway?: boolean }) {
-  const [motion] = useState(() => new MotionBuffer());
+function Actor({ person, self, serverTime, observingRailway = false, mobile = false }: { person: Person; self: boolean; serverTime: number; observingRailway?: boolean; mobile?: boolean }) {
+  const [motion] = useState(() => new MotionBuffer(self ? 50 : 100));
   const initialPerson = person;
   const groupRef = useRef<Group>(null);
   const bodyRef = useRef<Group>(null);
@@ -129,15 +129,15 @@ function Actor({ person, self, serverTime, observingRailway = false }: { person:
   });
   return <group ref={groupRef} position={initial} rotation={[0, initialYaw, 0]} visible={!!person}>
     <group ref={bodyRef} visible={person?.vehicle === null}>{person.duty === 'paramedic' || person.duty === 'firefighter' ? <EmergencyWorker duty={person.duty} /> : person.duty ? <PoliceOfficer duty={person.duty} serverTime={serverTime} /> : <Rider color={initialColor} seated={person?.seat !== null} appearance={person.appearance} />}</group>
-    <Html position={[0, person?.vehicle === null ? 2.2 * pedestrianScale(person.appearance) : 2.8, 0]} center style={{ pointerEvents: 'none' }}>
+    {(!mobile || self) && <Html position={[0, person?.vehicle === null ? 2.2 * pedestrianScale(person.appearance) : 2.8, 0]} center style={{ pointerEvents: 'none' }}>
       <span className={`player-label${self ? ' player-label-self' : ''}`}>{initialName}{self ? ' (you)' : ''}</span>
-    </Html>
+    </Html>}
   </group>;
 }
 const MemoizedActor = React.memo(Actor);
 
-function SharedVehicle({ vehicle, serverTime }: { vehicle: CarState; serverTime: number }) {
-  const [motion] = useState(() => new MotionBuffer());
+function SharedVehicle({ vehicle, serverTime, local = false }: { vehicle: CarState; serverTime: number; local?: boolean }) {
+  const motion = useMemo(() => new MotionBuffer(local ? 50 : 100), [local]);
   const initialVehicle = vehicle;
   const groupRef = useRef<Group>(null);
   const [initial] = useState<[number, number, number]>([initialVehicle?.x || 0, -0.5, initialVehicle?.z || 0]);
@@ -184,6 +184,9 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
     let ready = false;
     let lastReceived = performance.now();
     let lastSent = -Infinity;
+    let lastHudUpdate = -Infinity;
+    let previousMode = '';
+    const hudInterval = matchMedia('(any-pointer: coarse)').matches ? 150 : 100;
     let previousControls = '';
     let notice = '', noticeUntil = 0;
     let riding = session.snapshot.players.find(p => p.id === session.snapshot.self)?.vehicle != null;
@@ -226,7 +229,14 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
         const me = next.players.find(p => p.id === next.self);
         if (!me) return;
         sequenceRef.current = Math.max(sequenceRef.current, sequence);
-        setSnapshot({ ...next, serverTime: next.serverTime ?? performance.now() }); onSnapshot(next); onCount(next.players.length); onConnection('Connected');
+        setSnapshot({ ...next, serverTime: next.serverTime ?? performance.now() });
+        const mode = `${me.vehicle}:${me.interior}:${me.station}:${me.seat}`;
+        if (performance.now() - lastHudUpdate >= hudInterval || mode !== previousMode) {
+          onSnapshot(next);
+          lastHudUpdate = performance.now();
+          previousMode = mode;
+        }
+        onCount(next.players.length); onConnection('Connected');
         riding = me.vehicle !== null;
         if (sentTarget && sequence >= sentTarget.sequence && clickTargetRef.current === sentTarget.point && next.targetPoint === null) {
           clickTargetRef.current = null; sentTarget = null;
@@ -332,8 +342,8 @@ export default function Player({ session, observingRailway = false, onSnapshot, 
   const nearby = (x: number, z: number) => Math.abs(x - (self?.x ?? 0)) < (mobile ? 85 : 150) && Math.abs(z - (self?.z ?? 0)) < (mobile ? 85 : 150);
   return <>
     <VehicleAudio snapshot={snapshot} />
-    {snapshot.players.map(p => p.interior === interior ? <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={p.id === snapshot.self} observingRailway={observingRailway} /> : null)}
-    {interior === null && snapshot.npcs?.filter(p => nearby(p.x, p.z)).map(p => <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={false} />)}
-    {interior === null && snapshot.vehicles.map((v, i) => nearby(v.x, v.z) ? <MemoizedSharedVehicle key={i} vehicle={v} serverTime={snapshot.serverTime ?? 0} /> : null)}
+    {snapshot.players.map(p => p.interior === interior ? <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={p.id === snapshot.self} mobile={mobile} observingRailway={observingRailway} /> : null)}
+    {interior === null && snapshot.npcs?.filter(p => nearby(p.x, p.z)).map(p => <MemoizedActor key={p.id} person={p} serverTime={snapshot.serverTime ?? 0} self={false} mobile={mobile} />)}
+    {interior === null && snapshot.vehicles.map((v, i) => nearby(v.x, v.z) ? <MemoizedSharedVehicle key={i} vehicle={v} local={self?.vehicle === i} serverTime={snapshot.serverTime ?? 0} /> : null)}
   </>;
 }
