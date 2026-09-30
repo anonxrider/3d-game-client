@@ -44,11 +44,20 @@ function createSeededRandom(seed = 0x45_54_48_45) {
 const random = createSeededRandom();
 const generatedHouses: HouseSpawn[] = [];
 const generatedTrees: TreeSpawn[] = [];
-const generatedStreetProps: { kind: 'fruit' | 'bench' | 'chair' | 'bus' | 'hotel' | 'streetlight', x: number, z: number, yaw: number, width: number, depth: number }[] = [
+export type BusConfig = { type: 'city' | 'mini' | 'double', name: string, color1: string, color2: string };
+export type PetConfig = { kind: 'dog' | 'cat', color: string };
+type StreetPropRaw = { kind: 'fruit' | 'bench' | 'chair' | 'bus' | 'hotel' | 'streetlight' | 'crowd' | 'zebra' | 'fountain' | 'pet', x: number, z: number, yaw: number, width: number, depth: number, busConfig?: BusConfig, petConfig?: PetConfig };
+
+const generatedStreetProps: StreetPropRaw[] = [
   { kind: 'fruit', x: -7, z: -16, yaw: Math.PI / 2, width: 3.4, depth: 2 },
+  { kind: 'crowd', x: -6, z: -14, yaw: 0, width: 2, depth: 2 },
   { kind: 'fruit', x: 7, z: 19, yaw: -Math.PI / 2, width: 3.4, depth: 2 },
-  { kind: 'bus', x: 23, z: -1.8, yaw: Math.PI / 2, width: 2.8, depth: 8.4 },
+  { kind: 'crowd', x: 6, z: 17, yaw: 0, width: 2, depth: 2 },
+  { kind: 'bus', x: 23, z: -1.8, yaw: Math.PI / 2, width: 2.8, depth: 8.4, busConfig: { type: 'city', name: 'CITY BUS', color1: '#fbbf24', color2: '#fef3c7' } },
+  { kind: 'bus', x: -45, z: 40, yaw: 0, width: 2.8, depth: 8.4, busConfig: { type: 'double', name: 'LONDON METRO', color1: '#dc2626', color2: '#ef4444' } },
+  { kind: 'bus', x: 45, z: -60, yaw: -Math.PI / 2, width: 2.8, depth: 8.4, busConfig: { type: 'mini', name: 'AIRPORT SHUTTLE', color1: '#3b82f6', color2: '#93c5fd' } },
   { kind: 'hotel', x: 31, z: -15, yaw: 0, width: 10, depth: 8 },
+  { kind: 'crowd', x: 29, z: -12, yaw: 0, width: 2, depth: 2 },
 ];
 
 const colors = ['#dfbfa8', '#c7dfb1', '#a8cddd', '#f1c99b', '#bed9ce', '#d8c9ef', '#f0c4b4', '#bbd3ea', '#eadbaa'];
@@ -70,7 +79,11 @@ for (let gx = -CITY_BLOCK_RADIUS; gx <= CITY_BLOCK_RADIUS; gx++) {
         { type: 'house', x: 14, z: 15, color: '#f0c4b4' }
       );
       generatedTrees.push([-7, -7], [7, -7], [-8, 7], [8, 7], [-20, -6], [21, -7]);
-      generatedStreetProps.push({ kind: 'bench', x: -7, z: 12, yaw: Math.PI / 2, width: 2.8, depth: 0.9 }, { kind: 'bench', x: 7, z: -12, yaw: -Math.PI / 2, width: 2.8, depth: 0.9 });
+      generatedStreetProps.push(
+        { kind: 'bench', x: -7, z: 12, yaw: Math.PI / 2, width: 2.8, depth: 0.9 }, 
+        { kind: 'bench', x: 7, z: -12, yaw: -Math.PI / 2, width: 2.8, depth: 0.9 },
+        { kind: 'fountain', x: 14, z: 0, yaw: 0, width: 5, depth: 5 }
+      );
       continue;
     }
 
@@ -96,6 +109,19 @@ for (let gx = -CITY_BLOCK_RADIUS; gx <= CITY_BLOCK_RADIUS; gx++) {
       generatedStreetProps.push({ kind: 'chair', x: cx + 12, z: cz - 4.8, yaw: 0, width: 0.8, depth: 0.8 });
       generatedStreetProps.push({ kind: 'streetlight', x: cx - 8, z: cz - 4.5, yaw: 0, width: 0.5, depth: 0.5 });
       generatedStreetProps.push({ kind: 'streetlight', x: cx + 8, z: cz + 4.5, yaw: Math.PI, width: 0.5, depth: 0.5 });
+    }
+    
+    // Zebra crossings
+    if (Math.abs(gx + gz) % 3 === 0) {
+      generatedStreetProps.push({ kind: 'zebra', x: cx + 20, z: cz, yaw: 0, width: 8, depth: 6 });
+      generatedStreetProps.push({ kind: 'zebra', x: cx, z: cz + 20, yaw: Math.PI / 2, width: 8, depth: 6 });
+    }
+    
+    // Pets
+    if (random() > 0.4) {
+      const isDog = random() > 0.5;
+      const color = isDog ? (random() > 0.5 ? '#fcd34d' : '#451a03') : (random() > 0.5 ? '#ffffff' : '#1e293b');
+      generatedStreetProps.push({ kind: 'pet', x: cx + 5, z: cz - 5, yaw: 0, width: 0, depth: 0, petConfig: { kind: isDog ? 'dog' : 'cat', color } });
     }
   }
 }

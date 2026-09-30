@@ -9,6 +9,7 @@ import { getWeather } from "@/lib/weather";
 import { getDayCycle } from "@/lib/day-night";
 import DayNightCycle from "./Lighting";
 import EnvironmentProps from "./Environment";
+import WeatherSystem from "./WeatherSystem";
 import Auth from "./Auth";
 import { buildings, vehicleShopItems, getAreaName } from "./world";
 import type { Snapshot } from "@/lib/multiplayer";
@@ -277,6 +278,7 @@ export default function GameScene() {
       <fog attach="fog" args={["#bfd6e1", observingAirport ? 1200 : mobile ? 55 : 90, observingAirport ? 2000 : mobile ? 110 : 260]} />
       <AdaptiveResolution />
       <DayNightCycle serverTime={snapshot?.serverTime} interior={interior !== null} />
+      <WeatherSystem serverTime={snapshot?.serverTime} center={sceneryCenter} mobile={mobile} />
 
       {interior === null ? <>
       {/* The Infinite Land */}
